@@ -161,6 +161,14 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"members/{id}", null, ct);
     }
 
+    /// <summary>Lädt einen Roster (PDF/Excel) vom Server. type: "alpha" oder "ifaf".</summary>
+    public Task<byte[]> DownloadRosterAsync(bool ifaf, string format, IDictionary<string, string> query, CancellationToken ct = default)
+    {
+        var qs = string.Join("&", query.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
+        var path = (ifaf ? "roster-ifaf." : "roster.") + format + (qs.Length > 0 ? "?" + qs : "");
+        return DownloadAsync(path, ct);
+    }
+
     public Task<byte[]> DownloadCsvAsync(string? status, bool template, CancellationToken ct = default)
     {
         var path = template ? "template.csv" : "members.csv" + (status is null ? "" : "?status=" + status);

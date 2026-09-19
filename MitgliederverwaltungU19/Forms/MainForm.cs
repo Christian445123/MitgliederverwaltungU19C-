@@ -93,6 +93,7 @@ public sealed class MainForm : Form
         deleteAll.ForeColor = Theme.Danger;
         var import = Theme.MakeButton("Import …");
         var export = Theme.MakeButton("Export CSV");
+        var roster = Theme.MakeButton("Roster …");
         var settings = Theme.MakeButton("Einstellungen");
         var deploy = Theme.MakeButton("Änderungen einspielen");
 
@@ -104,6 +105,7 @@ public sealed class MainForm : Form
         deleteAll.Enabled = _ping.CanWrite;
         import.Click += async (_, _) => await OpenImportAsync();
         export.Click += async (_, _) => await ExportAsync();
+        roster.Click += (_, _) => { using var form = new RosterForm(_api); form.ShowDialog(this); };
         settings.Click += (_, _) => OpenSettings();
         deploy.Click += (_, _) =>
         {
@@ -121,7 +123,7 @@ public sealed class MainForm : Form
         deploy.Enabled = _ping.CanWrite;
         _writeButtons.AddRange(new[] { add, edit, delete, import });
 
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, deleteAll, deploy, settings });
+        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, roster, deleteAll, deploy, settings });
         if (!_ping.CanWrite)
         {
             foreach (var b in _writeButtons) b.Enabled = false;
