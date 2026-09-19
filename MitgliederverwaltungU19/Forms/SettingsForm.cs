@@ -15,6 +15,7 @@ public sealed class SettingsForm : Form
         _settings = settings;
         Text = firstRun ? "Ersteinrichtung – Verbindung" : "Verbindungseinstellungen";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;

@@ -18,6 +18,21 @@ public static class Theme
     public static readonly Font Bold = new(FontFamily(), 10f, FontStyle.Bold);
     public static readonly Font Title = new(FontFamily(), 15f, FontStyle.Bold);
 
+    /// <summary>Programm-Icon (aus der .exe), damit alle Fenster in Titelleiste und Taskleiste es zeigen.</summary>
+    public static readonly Icon? AppIcon = LoadAppIcon();
+
+    private static Icon? LoadAppIcon()
+    {
+        try
+        {
+            return Environment.ProcessPath is { } path ? Icon.ExtractAssociatedIcon(path) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Moderne Windows-Schrift, falls vorhanden (Windows 11), sonst Segoe UI.</summary>
     private static string FontFamily()
     {

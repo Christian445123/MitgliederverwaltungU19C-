@@ -27,6 +27,7 @@ public sealed class DeployForm : Form
 
         Text = "Änderungen einspielen";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(760, 640);

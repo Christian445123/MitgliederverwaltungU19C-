@@ -276,6 +276,13 @@ public sealed class ApiClient : IDisposable
         return (await response.Content.ReadAsByteArrayAsync(ct), ext);
     }
 
+    /// <summary>Setzt oder entfernt die "Fehlt"-Markierung eines Pflichtdokuments (nada, pass, ecard, rechte).</summary>
+    public async Task SetDocumentFlagAsync(int memberId, string type, bool missing, CancellationToken ct = default)
+    {
+        var body = new JsonObject { [type] = missing };
+        using var _ = await SendJsonAsync(HttpMethod.Post, $"members/{memberId}/document-flags", body, ct);
+    }
+
     public async Task UploadDocumentAsync(int memberId, string type, string filePath, CancellationToken ct = default, string kind = "members")
     {
         using var form = new MultipartFormDataContent();

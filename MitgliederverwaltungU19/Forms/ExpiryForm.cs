@@ -9,6 +9,7 @@ public sealed class ExpiryForm : Form
     {
         Text = "Ablaufende Dokumente";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(760, 480);

@@ -26,10 +26,11 @@ public sealed class MemberForm : Form
 
         Text = member is null ? "Neues Mitglied" : "Mitglied bearbeiten – " + member.FullName;
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(640, 560);
-        MinimumSize = new Size(560, 420);
+        ClientSize = new Size(800, 720);
+        MinimumSize = new Size(620, 560);
 
         var tabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(14, 6) };
         foreach (var group in Fields.Groups)
@@ -118,11 +119,15 @@ public sealed class MemberForm : Form
 
     private Control BuildDocumentsPanel()
     {
-        var box = new GroupBox { Text = "Dokumente (PDF, JPG, PNG – max. 15 MB)", Dock = DockStyle.Bottom, Height = 30 + DocumentTypes.All.Count * 36, Padding = new Padding(10, 6, 10, 6) };
+        var box = new GroupBox { Text = "Dokumente (PDF, JPG, PNG – max. 15 MB)", Dock = DockStyle.Bottom, Height = 34 + DocumentTypes.All.Count * 42, Padding = new Padding(10, 6, 10, 6) };
         var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = DocumentTypes.All.Count };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var i = 0; i < DocumentTypes.All.Count; i++)
+        {
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        }
 
         foreach (var (key, label) in DocumentTypes.All)
         {
@@ -141,6 +146,22 @@ public sealed class MemberForm : Form
             var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
             buttons.Controls.AddRange(new Control[] { open, upload, remove });
 
+            // "Fehlt"-Haken für die Pflichtdokumente (nicht für die Rückseiten)
+            if (key is "ecard" or "pass" or "nada" or "rechte")
+            {
+                var missing = new CheckBox
+                {
+                    Text = "Fehlt",
+                    AutoSize = true,
+                    ForeColor = Theme.Danger,
+                    Margin = new Padding(8, 8, 0, 0),
+                    Checked = _member?.MissingFlags.TryGetValue(key, out var flagged) == true && flagged,
+                    Enabled = _member is not null && !_readOnly,
+                };
+                missing.CheckedChanged += async (_, _) => await SetMissingFlagAsync(typeKey, missing);
+                buttons.Controls.Add(missing);
+            }
+
             table.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
             table.Controls.Add(status);
             table.Controls.Add(buttons);
@@ -148,6 +169,20 @@ public sealed class MemberForm : Form
         box.Controls.Add(table);
         RefreshDocumentState();
         return box;
+    }
+
+    private async Task SetMissingFlagAsync(string type, CheckBox box)
+    {
+        if (_member is null) return;
+        try
+        {
+            await _api.SetDocumentFlagAsync(_member.Id, type, box.Checked);
+            DocumentsChanged = true;
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(this, ex);
+        }
     }
 
     private void RefreshDocumentState()

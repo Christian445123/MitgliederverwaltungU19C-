@@ -21,6 +21,8 @@ public sealed class MainForm : Form
     private DeployForm? _deployForm;
     private readonly Panel _banner = new() { Dock = DockStyle.Top, Height = 40, BackColor = Color.FromArgb(0xFF, 0xF2, 0xE6), Visible = false };
     private readonly Label _bannerText = new() { AutoSize = true, Location = new Point(16, 11), Font = Theme.Bold };
+    private readonly Button _showExpiry = Theme.MakeButton("Ablauf anzeigen");
+    private readonly Button _showMissing = Theme.MakeButton("Fehlende Dokumente");
     private bool _expiryAnnounced;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
@@ -31,6 +33,7 @@ public sealed class MainForm : Form
 
         Text = "Mitgliederverwaltung U19";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1180, 720);
@@ -163,11 +166,14 @@ public sealed class MainForm : Form
             if (e.KeyCode == Keys.Enter) { e.Handled = true; if (SelectedMember() is { } m) await OpenEditorAsync(m); }
         };
 
-        var showExpiry = Theme.MakeButton("Anzeigen");
-        showExpiry.Dock = DockStyle.Right;
-        showExpiry.Margin = new Padding(0);
-        showExpiry.Click += (_, _) => ShowExpiry();
-        _banner.Controls.Add(showExpiry);
+        _showExpiry.Dock = DockStyle.Right;
+        _showExpiry.Margin = new Padding(0);
+        _showExpiry.Click += (_, _) => ShowExpiry();
+        _showMissing.Dock = DockStyle.Right;
+        _showMissing.Margin = new Padding(0);
+        _showMissing.Click += (_, _) => ShowMissing();
+        _banner.Controls.Add(_showExpiry);
+        _banner.Controls.Add(_showMissing);
         _banner.Controls.Add(_bannerText);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 30, Padding = new Padding(14, 0, 14, 0), BackColor = Color.White };
         footer.Controls.Add(_footer);
@@ -294,34 +300,68 @@ public sealed class MainForm : Form
     private void UpdateExpiryBanner()
     {
         var items = Expiry.Find(_all);
-        if (items.Count == 0)
+        var missing = MissingDocuments();
+        _showMissing.Visible = missing.Count > 0;
+        _showExpiry.Visible = items.Count > 0;
+        if (items.Count == 0 && missing.Count == 0)
         {
             _banner.Visible = false;
             return;
         }
 
         var expired = items.Count(i => i.State == ExpiryState.Expired);
-        var nada = items.Count(i => i.Document == "NADA-Zertifikat");
-        var pass = items.Count - nada;
-        _bannerText.Text = $"⚠ {expired} abgelaufen, {items.Count - expired} laufen bald ab – NADA-Zertifikate: {nada}, Reisepässe: {pass}";
-        _bannerText.ForeColor = expired > 0 ? Theme.Danger : Theme.AccentDark;
+        var parts = new List<string>();
+        if (items.Count > 0)
+        {
+            var nada = items.Count(i => i.Document == "NADA-Zertifikat");
+            parts.Add($"{expired} abgelaufen, {items.Count - expired} laufen bald ab (NADA: {nada}, Pass: {items.Count - nada})");
+        }
+        if (missing.Count > 0)
+        {
+            parts.Add($"{missing.Count} Spieler mit fehlenden Dokumenten");
+        }
+        _bannerText.Text = "⚠ " + string.Join("  ·  ", parts);
+        _bannerText.ForeColor = expired > 0 || missing.Count > 0 ? Theme.Danger : Theme.AccentDark;
         _banner.Visible = true;
 
         // Beim Start einmal aktiv melden
         if (!_expiryAnnounced)
         {
             _expiryAnnounced = true;
-            var lines = items.Take(12).Select(i => $"• {i.Member.FullName} – {i.Document}: {i.Date:dd.MM.yyyy} ({i.Describe()})");
-            var more = items.Count > 12 ? $"\n… und {items.Count - 12} weitere (Button „Anzeigen“)" : "";
-            MessageBox.Show(this,
-                $"Ablaufende Dokumente:\n\n{string.Join("\n", lines)}{more}",
-                "Ablauf-Erinnerung", MessageBoxButtons.OK, expired > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            var text = new System.Text.StringBuilder();
+            if (items.Count > 0)
+            {
+                var lines = items.Take(10).Select(i => $"• {i.Member.FullName} – {i.Document}: {i.Date:dd.MM.yyyy} ({i.Describe()})");
+                text.AppendLine("Ablaufende Dokumente:").AppendLine().AppendLine(string.Join("\n", lines));
+                if (items.Count > 10) text.AppendLine($"… und {items.Count - 10} weitere");
+                text.AppendLine();
+            }
+            if (missing.Count > 0)
+            {
+                var lines = missing.Take(10).Select(m => $"• {m.FullName} – fehlt: {string.Join(", ", m.MissingDocuments.Select(Member.DocumentLabel))}");
+                text.AppendLine("Fehlende Dokumente (Spieler im Kader):").AppendLine().AppendLine(string.Join("\n", lines));
+                if (missing.Count > 10) text.AppendLine($"… und {missing.Count - 10} weitere (Button „Fehlende Dokumente“)");
+            }
+            MessageBox.Show(this, text.ToString().TrimEnd(), "Erinnerung",
+                MessageBoxButtons.OK, expired > 0 || missing.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         }
     }
+
+    /// <summary>Aktive Spieler im Kader, bei denen NADA, Reisepass, E-Card oder Rechte &amp; Pflichten fehlen.</summary>
+    private List<Member> MissingDocuments() => _all
+        .Where(m => m.Get("status") != "inaktiv" && m.Get("kader") != "nicht_im_kader" && m.MissingDocuments.Count > 0)
+        .OrderBy(m => m.FullName, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
 
     private void ShowExpiry()
     {
         using var form = new ExpiryForm(Expiry.Find(_all));
+        form.ShowDialog(this);
+    }
+
+    private void ShowMissing()
+    {
+        using var form = new MissingDocsForm(MissingDocuments());
         form.ShowDialog(this);
     }
     private List<Member> SelectedMembers() =>

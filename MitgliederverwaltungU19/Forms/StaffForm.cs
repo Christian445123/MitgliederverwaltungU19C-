@@ -48,6 +48,7 @@ public sealed class StaffForm : Form
         _canWrite = canWrite;
         Text = "Staff";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(1100, 600);
@@ -213,6 +214,7 @@ internal sealed class StaffEditDialog : Form
 
         Text = row is null ? "Neue Person im Staff" : "Staff bearbeiten";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;

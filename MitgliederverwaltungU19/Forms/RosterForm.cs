@@ -26,6 +26,7 @@ public sealed class RosterForm : Form
         _api = api;
         Text = "Roster erstellen";
         Font = Theme.Body;
+        Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;

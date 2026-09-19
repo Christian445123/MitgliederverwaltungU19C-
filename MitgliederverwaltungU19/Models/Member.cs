@@ -13,6 +13,21 @@ public sealed class Member
     /// <summary>Welche Dokumente vorhanden sind (ecard, pass, nada, rechte).</summary>
     public Dictionary<string, bool> Documents { get; } = new();
 
+    /// <summary>Fehlende Pflichtdokumente laut Server (nada, pass, ecard, rechte).</summary>
+    public List<string> MissingDocuments { get; } = new();
+
+    /// <summary>Von Hand mit "Fehlt" markierte Dokumente.</summary>
+    public Dictionary<string, bool> MissingFlags { get; } = new();
+
+    public static string DocumentLabel(string type) => type switch
+    {
+        "nada" => "NADA-Zertifikat",
+        "pass" => "Reisepass",
+        "ecard" => "E-Card",
+        "rechte" => "Rechte & Pflichten",
+        _ => type,
+    };
+
     public string Get(string key) => Values.TryGetValue(key, out var v) ? v ?? "" : "";
 
     /// <summary>Automatisch gebildeter Name "Nachname Vorname" (z. B. "Walch Jakob").</summary>
@@ -41,6 +56,20 @@ public sealed class Member
             foreach (var d in docs.EnumerateObject())
             {
                 m.Documents[d.Name] = d.Value.ValueKind == JsonValueKind.True;
+            }
+        }
+        if (e.TryGetProperty("dokumente_fehlen", out var miss) && miss.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var t in miss.EnumerateArray())
+            {
+                if (t.GetString() is { } type) m.MissingDocuments.Add(type);
+            }
+        }
+        if (e.TryGetProperty("dokumente_markiert_fehlt", out var flags) && flags.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var f in flags.EnumerateObject())
+            {
+                m.MissingFlags[f.Name] = f.Value.ValueKind == JsonValueKind.True;
             }
         }
         if (e.TryGetProperty("bestaetigt_am", out var c) && c.ValueKind == JsonValueKind.String)
