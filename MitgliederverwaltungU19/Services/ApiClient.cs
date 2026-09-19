@@ -29,7 +29,16 @@ public sealed class ImportColumn
 {
     public string Header { get; set; } = "";
     public string? Field { get; set; }
+    public int Index { get; set; }
+    public string? Key { get; set; }
+    public string State { get; set; } = "";
     public int Values { get; set; }
+}
+
+public sealed class ImportField
+{
+    public string Key { get; set; } = "";
+    public string Label { get; set; } = "";
 }
 
 public sealed class ImportCounts
@@ -55,6 +64,8 @@ public sealed class ImportResponse
     public List<ImportRow> Rows { get; set; } = new();
     public List<ImportColumn> Columns { get; set; } = new();
     public int HeaderRow { get; set; }
+    public List<ImportField> Fields { get; set; } = new();
+    public List<string> MissingRequired { get; set; } = new();
     public ImportResult? Result { get; set; }
 }
 
@@ -140,7 +151,7 @@ public sealed class ApiClient : IDisposable
         return DownloadAsync(path, ct);
     }
 
-    public async Task<ImportResponse> ImportAsync(string filePath, bool updateExisting, bool commit, string? kaderDefault = null, CancellationToken ct = default)
+    public async Task<ImportResponse> ImportAsync(string filePath, bool updateExisting, bool commit, string? kaderDefault = null, Dictionary<int, string>? mapping = null, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(await File.ReadAllBytesAsync(filePath, ct));
@@ -148,6 +159,10 @@ public sealed class ApiClient : IDisposable
         form.Add(new StringContent(updateExisting ? "1" : "0"), "update_existing");
         form.Add(new StringContent(commit ? "1" : "0"), "commit");
         form.Add(new StringContent(kaderDefault ?? ""), "kader_default");
+        if (mapping is { Count: > 0 })
+        {
+            form.Add(new StringContent(JsonSerializer.Serialize(mapping.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value))), "mapping");
+        }
 
         using var response = await SendAsync(() => _http.PostAsync(Endpoint("import"), form, ct));
         var body = await response.Content.ReadAsStringAsync(ct);

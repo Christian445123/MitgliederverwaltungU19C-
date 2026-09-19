@@ -22,6 +22,7 @@ public sealed class ImportForm : Form
     private readonly Button _preview = Theme.MakeButton("Vorschau");
     private readonly Button _mapping = Theme.MakeButton("Spaltenzuordnung …");
     private ImportResponse? _last;
+    private Dictionary<int, string>? _overrides;
     private readonly Button _commit = Theme.MakeButton("Importieren", primary: true);
     private string? _file;
 
@@ -121,6 +122,7 @@ public sealed class ImportForm : Form
         using var dialog = new OpenFileDialog { Filter = "Excel/CSV|*.xlsx;*.csv;*.txt|Alle Dateien|*.*" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         _file = dialog.FileName;
+        _overrides = null; // neue Datei = neue automatische Zuordnung
         _path.Text = _file;
         _preview.Enabled = true;
         _commit.Enabled = false;
@@ -150,7 +152,7 @@ public sealed class ImportForm : Form
         UseWaitCursor = true;
         try
         {
-            var response = await _api.ImportAsync(_file, _update.Checked, commit, KaderDefault());
+            var response = await _api.ImportAsync(_file, _update.Checked, commit, KaderDefault(), _overrides);
 
             if (commit && response.Result is { } result)
             {
@@ -184,14 +186,13 @@ public sealed class ImportForm : Form
 
     private string? KaderDefault() => _kader.SelectedIndex switch { 1 => "kader", 2 => "nicht_im_kader", _ => null };
 
-    private void ShowMapping()
+    private async void ShowMapping()
     {
         if (_last is null) return;
-        var lines = _last.Columns.Select(c =>
-            $"{(c.Field is null ? "✗" : "✓")}  {c.Header}  →  {c.Field ?? "NICHT ZUGEORDNET"}   ({c.Values} Werte)");
-        MessageBox.Show(this,
-            $"Überschriftenzeile: {_last.HeaderRow}\n\n" + string.Join("\n", lines),
-            "Spaltenzuordnung", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        using var form = new MappingForm(_last);
+        if (form.ShowDialog(this) != DialogResult.OK) return;
+        _overrides = new Dictionary<int, string>(form.Mapping);
+        await RunAsync(commit: false);
     }
 
     private void ShowPreview(ImportResponse r)
@@ -209,6 +210,10 @@ public sealed class ImportForm : Form
         var c = r.Counts;
         var text = $"{c.Create} neu · {c.Update} aktualisieren · {c.Skip} übersprungen · {c.Error} fehlerhaft";
         if (c.Warning > 0) text += $" · {c.Warning} mit Hinweis";
+        if (r.MissingRequired.Count > 0)
+        {
+            text += "\nPflichtfeld nicht zugeordnet: " + string.Join(", ", r.MissingRequired) + " – bitte über „Spaltenzuordnung …“ zuordnen.";
+        }
         if (r.UnknownColumns.Count > 0)
         {
             text += "\nNICHT übernommen (Spalte konnte keinem Feld zugeordnet werden): " + string.Join(", ", r.UnknownColumns);
