@@ -1,6 +1,6 @@
 namespace MitgliederverwaltungU19.Models;
 
-public enum FieldType { Text, Int, Date, Bool, Status, Multiline }
+public enum FieldType { Text, Int, Date, Bool, Status, Kader, Multiline }
 
 /// <summary>Beschreibt ein Mitgliedsfeld (Name in der API, Beschriftung, Typ, Registerkarte).</summary>
 public sealed record FieldDef(string Key, string Label, FieldType Type, string Group, bool Required = false);
@@ -27,14 +27,15 @@ public static class Fields
         new("groesse_cm", "Größe (cm)", FieldType.Int, GStamm),
         new("gewicht_kg", "Gewicht (kg)", FieldType.Int, GStamm),
         new("status", "Status", FieldType.Status, GStamm),
+        new("kader", "Kader", FieldType.Kader, GStamm),
 
         new("email", "E-Mail", FieldType.Text, GKontakt, true),
-        new("telefon", "Telefon", FieldType.Text, GKontakt),
+        new("telefon", "Telefon Spieler", FieldType.Text, GKontakt),
         new("plz", "PLZ", FieldType.Text, GKontakt),
         new("ort", "Ort", FieldType.Text, GKontakt),
         new("strasse", "Straße", FieldType.Text, GKontakt),
         new("erz_name", "Erziehungsberechtigte(r)", FieldType.Text, GKontakt),
-        new("erz_telefon", "Telefon Erziehungsber.", FieldType.Text, GKontakt),
+        new("erz_telefon", "Telefon Erzieh", FieldType.Text, GKontakt),
         new("erz_email", "E-Mail Erziehungsber.", FieldType.Text, GKontakt),
 
         new("camp_1", "Camp 1", FieldType.Bool, GCamps),

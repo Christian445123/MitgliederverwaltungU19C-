@@ -11,6 +11,7 @@ public sealed class MainForm : Form
 
     private readonly TextBox _search = new() { Width = 240, PlaceholderText = "Suche: Name, E-Mail, Verein, Jersey Nr." };
     private readonly ComboBox _statusFilter = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _kaderFilter = new() { Width = 190, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly DataGridView _grid = new();
     private readonly Label _stats = new() { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(12, 8, 0, 0) };
     private readonly Label _footer = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft };
@@ -72,6 +73,10 @@ public sealed class MainForm : Form
         _statusFilter.Items.AddRange(new object[] { "Alle", "Aktiv", "Inaktiv" });
         _statusFilter.SelectedIndex = 0;
         _statusFilter.SelectedIndexChanged += (_, _) => ApplyFilter();
+        _kaderFilter.Items.AddRange(new object[] { "Alle Spieler", "Im Kader", "Spieler nicht im Kader" });
+        _kaderFilter.SelectedIndex = 0;
+        _kaderFilter.SelectedIndexChanged += (_, _) => ApplyFilter();
+        _kaderFilter.Margin = new Padding(0, 2, 8, 0);
         _search.TextChanged += (_, _) => ApplyFilter();
         _search.Margin = new Padding(0, 2, 8, 0);
         _statusFilter.Margin = new Padding(0, 2, 16, 0);
@@ -96,7 +101,7 @@ public sealed class MainForm : Form
         deploy.Enabled = _ping.CanWrite;
         _writeButtons.AddRange(new[] { add, edit, delete, import });
 
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, refresh, add, edit, delete, import, export, deploy, settings });
+        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, deploy, settings });
         if (!_ping.CanWrite)
         {
             foreach (var b in _writeButtons) b.Enabled = false;
@@ -135,6 +140,7 @@ public sealed class MainForm : Form
         AddColumn("email", "E-Mail", 24);
         AddColumn("telefon", "Telefon", 14);
         AddColumn("status", "Status", 8);
+        AddColumn("kader", "Kader", 11);
         AddColumn("bestaetigt", "Bestätigt", 9);
         _grid.CellDoubleClick += async (_, e) =>
         {
@@ -196,10 +202,12 @@ public sealed class MainForm : Form
     {
         var q = _search.Text.Trim();
         var status = _statusFilter.SelectedIndex switch { 1 => "aktiv", 2 => "inaktiv", _ => null };
+        var kader = _kaderFilter.SelectedIndex switch { 1 => "kader", 2 => "nicht_im_kader", _ => null };
         var selectedId = SelectedMember()?.Id;
 
         var filtered = _all.Where(m =>
             (status is null || m.Get("status") == status) &&
+            (kader is null || (m.Get("kader") == "nicht_im_kader" ? "nicht_im_kader" : "kader") == kader) &&
             (q.Length == 0 || new[] { "nachname", "vorname", "email", "verein", "jersey_nr" }
                 .Any(k => m.Get(k).Contains(q, StringComparison.CurrentCultureIgnoreCase)))).ToList();
 
@@ -211,6 +219,7 @@ public sealed class MainForm : Form
             var idx = _grid.Rows.Add(
                 m.FullName, m.Get("verein"), m.Get("position"), m.Get("jersey_nr"), m.Get("email"),
                 m.Get("telefon"), m.Get("status") == "inaktiv" ? "Inaktiv" : "Aktiv",
+                m.Get("kader") == "nicht_im_kader" ? "nicht im Kader" : "Im Kader",
                 m.ConfirmedAt is null ? "ausstehend" : "✓ " + FormatDate(m.ConfirmedAt));
             var row = _grid.Rows[idx];
             row.Tag = m;

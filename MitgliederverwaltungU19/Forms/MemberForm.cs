@@ -84,6 +84,7 @@ public sealed class MemberForm : Form
                 FieldType.Bool => new CheckBox { AutoSize = true, Text = "Ja" },
                 FieldType.Date => new DateTimePicker { ShowCheckBox = true, Checked = false, Format = DateTimePickerFormat.Short, Width = 150 },
                 FieldType.Status => new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150, Items = { "aktiv", "inaktiv" }, SelectedIndex = 0 },
+                FieldType.Kader => new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 220, Items = { "Im Kader", "Spieler nicht im Kader" }, SelectedIndex = 0, Tag = "kader" },
                 FieldType.Multiline => new TextBox { Multiline = true, Height = 60, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Top, MaxLength = 255 },
                 _ => new TextBox { Dock = DockStyle.Top },
             };
@@ -244,6 +245,9 @@ public sealed class MemberForm : Form
                 case DateTimePicker dtp:
                     if (DateTime.TryParse(v, out var d)) { dtp.Value = d; dtp.Checked = true; }
                     break;
+                case ComboBox kaderCombo when kaderCombo.Tag as string == "kader":
+                    kaderCombo.SelectedIndex = v == "nicht_im_kader" ? 1 : 0;
+                    break;
                 case ComboBox combo:
                     combo.SelectedItem = v == "inaktiv" ? "inaktiv" : "aktiv";
                     break;
@@ -263,6 +267,7 @@ public sealed class MemberForm : Form
             {
                 CheckBox cb => cb.Checked ? "true" : "false",
                 DateTimePicker dtp => dtp.Checked ? dtp.Value.ToString("yyyy-MM-dd") : null,
+                ComboBox kaderCombo when kaderCombo.Tag as string == "kader" => kaderCombo.SelectedIndex == 1 ? "nicht_im_kader" : "kader",
                 ComboBox combo => combo.SelectedItem?.ToString(),
                 var c => c.Text,
             };

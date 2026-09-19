@@ -60,6 +60,10 @@ public sealed class Member
             {
                 o[f.Key] = v == "true";
             }
+            else if (f.Type == FieldType.Kader)
+            {
+                o[f.Key] = v == "nicht_im_kader" ? "nicht_im_kader" : "kader";
+            }
             else if (f.Type == FieldType.Status)
             {
                 o[f.Key] = string.IsNullOrWhiteSpace(v) ? "aktiv" : v;

@@ -22,6 +22,14 @@ public sealed class ImportRow
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
     public List<string> Errors { get; set; } = new();
+    public List<string> Warnings { get; set; } = new();
+}
+
+public sealed class ImportColumn
+{
+    public string Header { get; set; } = "";
+    public string? Field { get; set; }
+    public int Values { get; set; }
 }
 
 public sealed class ImportCounts
@@ -30,6 +38,7 @@ public sealed class ImportCounts
     public int Update { get; set; }
     public int Skip { get; set; }
     public int Error { get; set; }
+    public int Warning { get; set; }
 }
 
 public sealed class ImportResult
@@ -44,6 +53,8 @@ public sealed class ImportResponse
     public ImportCounts Counts { get; set; } = new();
     public List<string> UnknownColumns { get; set; } = new();
     public List<ImportRow> Rows { get; set; } = new();
+    public List<ImportColumn> Columns { get; set; } = new();
+    public int HeaderRow { get; set; }
     public ImportResult? Result { get; set; }
 }
 
@@ -129,13 +140,14 @@ public sealed class ApiClient : IDisposable
         return DownloadAsync(path, ct);
     }
 
-    public async Task<ImportResponse> ImportAsync(string filePath, bool updateExisting, bool commit, CancellationToken ct = default)
+    public async Task<ImportResponse> ImportAsync(string filePath, bool updateExisting, bool commit, string? kaderDefault = null, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(await File.ReadAllBytesAsync(filePath, ct));
         form.Add(file, "file", Path.GetFileName(filePath));
         form.Add(new StringContent(updateExisting ? "1" : "0"), "update_existing");
         form.Add(new StringContent(commit ? "1" : "0"), "commit");
+        form.Add(new StringContent(kaderDefault ?? ""), "kader_default");
 
         using var response = await SendAsync(() => _http.PostAsync(Endpoint("import"), form, ct));
         var body = await response.Content.ReadAsStringAsync(ct);

@@ -16,9 +16,12 @@ public sealed class ImportForm : Form
     private readonly ApiClient _api;
     private readonly TextBox _path = new() { ReadOnly = true, Dock = DockStyle.Fill };
     private readonly CheckBox _update = new() { Text = "Vorhandene Mitglieder (gleiche E-Mail) aktualisieren – leere Zellen überschreiben nichts", Checked = true, AutoSize = true };
+    private readonly ComboBox _kader = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 380 };
     private readonly DataGridView _grid = new();
     private readonly Label _summary = new() { AutoSize = true, MaximumSize = new Size(820, 0), Margin = new Padding(0, 6, 0, 6) };
     private readonly Button _preview = Theme.MakeButton("Vorschau");
+    private readonly Button _mapping = Theme.MakeButton("Spaltenzuordnung …");
+    private ImportResponse? _last;
     private readonly Button _commit = Theme.MakeButton("Importieren", primary: true);
     private string? _file;
 
@@ -62,6 +65,11 @@ public sealed class ImportForm : Form
             Text = "Unterstützt .xlsx und .csv. Erste Zeile = Spaltenüberschriften; Pflicht: Nachname, Vorname, Mail.",
         });
         options.Controls.Add(_update);
+        options.Controls.Add(new Label { Text = "Kader-Status der importierten Spieler:", AutoSize = true, Margin = new Padding(0, 8, 0, 2) });
+        _kader.Items.AddRange(new object[] { "Aus der Datei (Spalte „Kader“), sonst „Im Kader“", "Alle als „Im Kader“ importieren", "Alle als „Spieler nicht im Kader“ importieren" });
+        _kader.SelectedIndex = 0;
+        _kader.SelectedIndexChanged += (_, _) => { if (_file is not null) _ = RunAsync(commit: false); };
+        options.Controls.Add(_kader);
         options.Controls.Add(_summary);
 
         _grid.Dock = DockStyle.Fill;
@@ -95,6 +103,9 @@ public sealed class ImportForm : Form
         bar.Controls.Add(close);
         bar.Controls.Add(_commit);
         bar.Controls.Add(_preview);
+        bar.Controls.Add(_mapping);
+        _mapping.Enabled = false;
+        _mapping.Click += (_, _) => ShowMapping();
 
         var center = new Panel { Dock = DockStyle.Fill, Padding = new Padding(14, 4, 14, 8) };
         center.Controls.Add(_grid);
@@ -139,7 +150,7 @@ public sealed class ImportForm : Form
         UseWaitCursor = true;
         try
         {
-            var response = await _api.ImportAsync(_file, _update.Checked, commit);
+            var response = await _api.ImportAsync(_file, _update.Checked, commit, KaderDefault());
 
             if (commit && response.Result is { } result)
             {
@@ -171,12 +182,24 @@ public sealed class ImportForm : Form
         }
     }
 
+    private string? KaderDefault() => _kader.SelectedIndex switch { 1 => "kader", 2 => "nicht_im_kader", _ => null };
+
+    private void ShowMapping()
+    {
+        if (_last is null) return;
+        var lines = _last.Columns.Select(c =>
+            $"{(c.Field is null ? "✗" : "✓")}  {c.Header}  →  {c.Field ?? "NICHT ZUGEORDNET"}   ({c.Values} Werte)");
+        MessageBox.Show(this,
+            $"Überschriftenzeile: {_last.HeaderRow}\n\n" + string.Join("\n", lines),
+            "Spaltenzuordnung", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
     private void ShowPreview(ImportResponse r)
     {
         _grid.Rows.Clear();
         foreach (var row in r.Rows)
         {
-            var note = string.Join("; ", row.Errors);
+            var note = string.Join("; ", row.Errors.Count > 0 ? row.Errors : row.Warnings);
             if (row.Action == "skip") note = "Existiert bereits (Aktualisieren nicht aktiviert)";
             var idx = _grid.Rows.Add(row.Line, ActionText.GetValueOrDefault(row.Action, row.Action), row.Name, row.Email, note);
             if (row.Action == "error") _grid.Rows[idx].DefaultCellStyle.ForeColor = Theme.Danger;
@@ -185,9 +208,15 @@ public sealed class ImportForm : Form
 
         var c = r.Counts;
         var text = $"{c.Create} neu · {c.Update} aktualisieren · {c.Skip} übersprungen · {c.Error} fehlerhaft";
-        if (r.UnknownColumns.Count > 0) text += "\nNicht erkannte Spalten (ignoriert): " + string.Join(", ", r.UnknownColumns);
+        if (c.Warning > 0) text += $" · {c.Warning} mit Hinweis";
+        if (r.UnknownColumns.Count > 0)
+        {
+            text += "\nNICHT übernommen (Spalte konnte keinem Feld zugeordnet werden): " + string.Join(", ", r.UnknownColumns);
+        }
         _summary.Text = text;
-        _summary.ForeColor = c.Error > 0 ? Theme.AccentDark : Theme.Green;
+        _summary.ForeColor = c.Error > 0 || r.UnknownColumns.Count > 0 ? Theme.AccentDark : Theme.Green;
+        _last = r;
+        _mapping.Enabled = true;
 
         var importable = c.Create + c.Update;
         _commit.Enabled = importable > 0;
