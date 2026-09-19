@@ -9,7 +9,7 @@ public sealed class MainForm : Form
     private readonly ApiClient _api;
     private readonly PingResult _ping;
 
-    private readonly TextBox _search = new() { Width = 260, PlaceholderText = "Suche: Name, E-Mail, Verein, Jersey Nr." };
+    private readonly TextBox _search = new() { Width = 240, PlaceholderText = "Suche: Name, E-Mail, Verein, Jersey Nr." };
     private readonly ComboBox _statusFilter = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly DataGridView _grid = new();
     private readonly Label _stats = new() { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(12, 8, 0, 0) };
@@ -64,10 +64,10 @@ public sealed class MainForm : Form
         var tools = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 52,
+            Height = 92,
             Padding = new Padding(14, 10, 14, 0),
             BackColor = Color.White,
-            WrapContents = false,
+            WrapContents = true,
         };
         _statusFilter.Items.AddRange(new object[] { "Alle", "Aktiv", "Inaktiv" });
         _statusFilter.SelectedIndex = 0;
@@ -83,6 +83,7 @@ public sealed class MainForm : Form
         var import = Theme.MakeButton("Import …");
         var export = Theme.MakeButton("Export CSV");
         var settings = Theme.MakeButton("Einstellungen");
+        var deploy = Theme.MakeButton("Änderungen einspielen");
 
         refresh.Click += async (_, _) => await ReloadAsync();
         add.Click += async (_, _) => await OpenEditorAsync(null);
@@ -91,9 +92,11 @@ public sealed class MainForm : Form
         import.Click += async (_, _) => await OpenImportAsync();
         export.Click += async (_, _) => await ExportAsync();
         settings.Click += (_, _) => OpenSettings();
+        deploy.Click += (_, _) => { using var form = new DeployForm(_settings, _api); form.ShowDialog(this); };
+        deploy.Enabled = _ping.CanWrite;
         _writeButtons.AddRange(new[] { add, edit, delete, import });
 
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, refresh, add, edit, delete, import, export, settings });
+        tools.Controls.AddRange(new Control[] { _search, _statusFilter, refresh, add, edit, delete, import, export, deploy, settings });
         if (!_ping.CanWrite)
         {
             foreach (var b in _writeButtons) b.Enabled = false;
@@ -232,7 +235,8 @@ public sealed class MainForm : Form
         if (member is null && !_ping.CanWrite) return;
 
         using var form = new MemberForm(_api, member, readOnly: !_ping.CanWrite);
-        if (form.ShowDialog(this) == DialogResult.OK)
+        var saved = form.ShowDialog(this) == DialogResult.OK;
+        if (saved || form.DocumentsChanged)
         {
             await ReloadAsync();
         }

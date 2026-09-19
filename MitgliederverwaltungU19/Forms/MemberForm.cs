@@ -11,11 +11,18 @@ public sealed class MemberForm : Form
     private readonly Dictionary<string, Control> _controls = new();
     private readonly Label _error = new() { AutoSize = true, ForeColor = Theme.Danger, MaximumSize = new Size(700, 0) };
     private Button _save = null!;
+    private readonly bool _readOnly;
+    private readonly Dictionary<string, bool> _docs = new();
 
     public MemberForm(ApiClient api, Member? member, bool readOnly)
     {
         _api = api;
         _member = member;
+        _readOnly = readOnly;
+        if (member is not null)
+        {
+            foreach (var kv in member.Documents) _docs[kv.Key] = kv.Value;
+        }
 
         Text = member is null ? "Neues Mitglied" : "Mitglied bearbeiten – " + member.FullName;
         Font = Theme.Body;
@@ -94,7 +101,134 @@ public sealed class MemberForm : Form
             table.Controls.Add(input);
         }
         page.Controls.Add(table);
+        if (group == Fields.GDoku)
+        {
+            page.Controls.Add(BuildDocumentsPanel());
+        }
         return page;
+    }
+
+    // ── Dokumente (E-Card, Pass, NADA, Rechte & Pflichten) ─────────────────
+    private readonly Dictionary<string, Label> _docStatus = new();
+    private readonly Dictionary<string, Button[]> _docButtons = new();
+
+    /// <summary>true, wenn Dokumente hochgeladen/entfernt wurden (Liste muss neu geladen werden).</summary>
+    public bool DocumentsChanged { get; private set; }
+
+    private Control BuildDocumentsPanel()
+    {
+        var box = new GroupBox { Text = "Dokumente (PDF, JPG, PNG – max. 5 MB)", Dock = DockStyle.Bottom, Height = 30 + DocumentTypes.All.Count * 36, Padding = new Padding(10, 6, 10, 6) };
+        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = DocumentTypes.All.Count };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        foreach (var (key, label) in DocumentTypes.All)
+        {
+            var status = new Label { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
+            _docStatus[key] = status;
+
+            var open = Theme.MakeButton("Öffnen");
+            var upload = Theme.MakeButton("Hochladen …");
+            var remove = Theme.MakeButton("Entfernen");
+            var typeKey = key;
+            open.Click += async (_, _) => await OpenDocumentAsync(typeKey);
+            upload.Click += async (_, _) => await UploadDocumentAsync(typeKey);
+            remove.Click += async (_, _) => await RemoveDocumentAsync(typeKey);
+            _docButtons[key] = new[] { open, upload, remove };
+
+            var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            buttons.Controls.AddRange(new Control[] { open, upload, remove });
+
+            table.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
+            table.Controls.Add(status);
+            table.Controls.Add(buttons);
+        }
+        box.Controls.Add(table);
+        RefreshDocumentState();
+        return box;
+    }
+
+    private void RefreshDocumentState()
+    {
+        foreach (var (key, _) in DocumentTypes.All)
+        {
+            var present = _docs.TryGetValue(key, out var p) && p;
+            _docStatus[key].Text = _member is null ? "–" : present ? "✓ vorhanden" : "fehlt";
+            _docStatus[key].ForeColor = present ? Theme.Green : Theme.Muted;
+            var buttons = _docButtons[key];
+            buttons[0].Enabled = _member is not null && present;
+            buttons[1].Enabled = _member is not null && !_readOnly;
+            buttons[2].Enabled = _member is not null && present && !_readOnly;
+        }
+    }
+
+    private async Task OpenDocumentAsync(string type)
+    {
+        if (_member is null) return;
+        try
+        {
+            UseWaitCursor = true;
+            var (data, ext) = await _api.DownloadDocumentAsync(_member.Id, type);
+            var dir = Path.Combine(Path.GetTempPath(), "U19Dokumente");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{type}-{_member.Id}{ext}");
+            await File.WriteAllBytesAsync(path, data);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(this, ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task UploadDocumentAsync(string type)
+    {
+        if (_member is null) return;
+        using var dialog = new OpenFileDialog { Filter = "Dokumente|*.pdf;*.jpg;*.jpeg;*.png|Alle Dateien|*.*" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            UseWaitCursor = true;
+            await _api.UploadDocumentAsync(_member.Id, type, dialog.FileName);
+            _docs[type] = true;
+            DocumentsChanged = true;
+            RefreshDocumentState();
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(this, ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task RemoveDocumentAsync(string type)
+    {
+        if (_member is null) return;
+        if (MessageBox.Show(this, "Dokument wirklich entfernen?", "Entfernen", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        try
+        {
+            UseWaitCursor = true;
+            await _api.DeleteDocumentAsync(_member.Id, type);
+            _docs[type] = false;
+            DocumentsChanged = true;
+            RefreshDocumentState();
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(this, ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
     }
 
     private void FillFrom(Member m)

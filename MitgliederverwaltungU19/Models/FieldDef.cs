@@ -62,7 +62,22 @@ public static class Fields
         new("hoodie_groesse", "Hoodie Größe", FieldType.Text, GAusr),
         new("mesh_shorts_groesse", "Mesh Shorts Größe", FieldType.Text, GAusr),
         new("socken_groesse", "Socken Größe", FieldType.Text, GAusr),
+        new("zimmer_nr", "Zimmer Nr", FieldType.Text, GAusr),
+        new("pract_jersey_nr", "Pract. Jersey Nr.", FieldType.Text, GAusr),
+        new("pract_hose_groesse", "Pract. Hose Größe", FieldType.Text, GAusr),
     };
 
     public static readonly string[] Groups = { GStamm, GKontakt, GCamps, GDoku, GAusr };
+}
+
+/// <summary>Dokumenttypen (Schlüssel wie in der API).</summary>
+public static class DocumentTypes
+{
+    public static readonly IReadOnlyList<(string Key, string Label)> All = new List<(string, string)>
+    {
+        ("ecard", "E-Card"),
+        ("pass", "Reisepass / Pass-Foto"),
+        ("nada", "NADA-Zertifikat"),
+        ("rechte", "Rechte & Pflichten (unterschrieben)"),
+    };
 }

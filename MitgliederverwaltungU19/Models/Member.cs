@@ -10,6 +10,9 @@ public sealed class Member
     public Dictionary<string, string?> Values { get; } = new();
     public string? ConfirmedAt { get; set; }
 
+    /// <summary>Welche Dokumente vorhanden sind (ecard, pass, nada, rechte).</summary>
+    public Dictionary<string, bool> Documents { get; } = new();
+
     public string Get(string key) => Values.TryGetValue(key, out var v) ? v ?? "" : "";
 
     public string FullName => $"{Get("nachname")}, {Get("vorname")}";
@@ -31,6 +34,13 @@ public sealed class Member
                 JsonValueKind.Number => p.GetRawText(),
                 _ => p.GetString(),
             };
+        }
+        if (e.TryGetProperty("dokumente", out var docs) && docs.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var d in docs.EnumerateObject())
+            {
+                m.Documents[d.Name] = d.Value.ValueKind == JsonValueKind.True;
+            }
         }
         if (e.TryGetProperty("bestaetigt_am", out var c) && c.ValueKind == JsonValueKind.String)
         {

@@ -95,8 +95,11 @@ public sealed class ApiClient : IDisposable
         while (true)
         {
             using var doc = await SendJsonAsync(HttpMethod.Get, $"members?limit=500&offset={offset}", null, ct);
-            var data = doc.RootElement.GetProperty("data");
-            var total = doc.RootElement.GetProperty("total").GetInt32();
+            if (!doc.RootElement.TryGetProperty("data", out var data) || !doc.RootElement.TryGetProperty("total", out var totalEl))
+            {
+                throw new ApiException("Die API auf dem Server ist veraltet (kennt \"?path=\" nicht). Bitte die aktuelle Version der Web-Anwendung auf dem Server einspielen (git pull).");
+            }
+            var total = totalEl.GetInt32();
             foreach (var e in data.EnumerateArray())
             {
                 result.Add(Member.FromJson(e));
@@ -138,6 +141,47 @@ public sealed class ApiClient : IDisposable
         var body = await response.Content.ReadAsStringAsync(ct);
         EnsureSuccess(response, body);
         return JsonSerializer.Deserialize<ImportResponse>(body, ImportJson) ?? throw new ApiException("Leere Antwort vom Server.");
+    }
+
+    /// <summary>Löst auf dem Server ein git pull aus. Liefert Erfolg und das Protokoll.</summary>
+    public async Task<(bool Success, string Log)> UpdateServerAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Post, "update", null, ct);
+        var root = doc.RootElement;
+        var ok = root.TryGetProperty("success", out var s) && s.ValueKind == JsonValueKind.True;
+        var log = root.TryGetProperty("log", out var l) ? l.GetString() ?? "" : "";
+        return (ok, log);
+    }
+
+    /// <summary>Lädt ein Dokument herunter und liefert Inhalt und Dateiendung.</summary>
+    public async Task<(byte[] Data, string Extension)> DownloadDocumentAsync(int memberId, string type, CancellationToken ct = default)
+    {
+        using var response = await SendAsync(() => _http.GetAsync(Endpoint($"members/{memberId}/documents/{type}"), ct));
+        if (!response.IsSuccessStatusCode)
+        {
+            EnsureSuccess(response, await response.Content.ReadAsStringAsync(ct));
+        }
+        var ext = response.Content.Headers.ContentType?.MediaType switch
+        {
+            "application/pdf" => ".pdf",
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            _ => ".bin",
+        };
+        return (await response.Content.ReadAsByteArrayAsync(ct), ext);
+    }
+
+    public async Task UploadDocumentAsync(int memberId, string type, string filePath, CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(filePath, ct)), "file", Path.GetFileName(filePath));
+        using var response = await SendAsync(() => _http.PostAsync(Endpoint($"members/{memberId}/documents/{type}"), form, ct));
+        EnsureSuccess(response, await response.Content.ReadAsStringAsync(ct));
+    }
+
+    public async Task DeleteDocumentAsync(int memberId, string type, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"members/{memberId}/documents/{type}", null, ct);
     }
 
     /// <summary>
