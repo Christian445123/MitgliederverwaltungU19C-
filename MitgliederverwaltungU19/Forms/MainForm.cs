@@ -94,6 +94,7 @@ public sealed class MainForm : Form
         var import = Theme.MakeButton("Import …");
         var export = Theme.MakeButton("Export CSV");
         var roster = Theme.MakeButton("Roster …");
+        var staff = Theme.MakeButton("Staff …");
         var settings = Theme.MakeButton("Einstellungen");
         var deploy = Theme.MakeButton("Änderungen einspielen");
 
@@ -106,6 +107,7 @@ public sealed class MainForm : Form
         import.Click += async (_, _) => await OpenImportAsync();
         export.Click += async (_, _) => await ExportAsync();
         roster.Click += (_, _) => { using var form = new RosterForm(_api); form.ShowDialog(this); };
+        staff.Click += (_, _) => { using var form = new StaffForm(_api, _ping.CanWrite); form.ShowDialog(this); };
         settings.Click += (_, _) => OpenSettings();
         deploy.Click += (_, _) =>
         {
@@ -123,7 +125,7 @@ public sealed class MainForm : Form
         deploy.Enabled = _ping.CanWrite;
         _writeButtons.AddRange(new[] { add, edit, delete, import });
 
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, roster, deleteAll, deploy, settings });
+        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, roster, staff, deleteAll, deploy, settings });
         if (!_ping.CanWrite)
         {
             foreach (var b in _writeButtons) b.Enabled = false;
@@ -138,21 +140,7 @@ public sealed class MainForm : Form
         _grid.MultiSelect = true;
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.BackgroundColor = Theme.Background;
-        _grid.BorderStyle = BorderStyle.None;
-        _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        _grid.GridColor = Theme.Border;
-        _grid.EnableHeadersVisualStyles = false;
-        _grid.ColumnHeadersHeight = 36;
-        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.NavyLight;
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-        _grid.ColumnHeadersDefaultCellStyle.Font = Theme.Bold;
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.NavyLight;
-        _grid.DefaultCellStyle.BackColor = Color.White;
-        _grid.DefaultCellStyle.SelectionBackColor = Theme.AccentSoft;
-        _grid.DefaultCellStyle.SelectionForeColor = Color.Black;
-        _grid.RowTemplate.Height = 30;
+        Theme.StyleGrid(_grid);
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
         AddColumn("name", "Name & Vorname", 22);

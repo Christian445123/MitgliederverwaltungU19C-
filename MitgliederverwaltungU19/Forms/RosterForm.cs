@@ -8,6 +8,8 @@ public sealed class RosterForm : Form
 {
     private readonly ApiClient _api;
     private readonly RadioButton _alpha = new() { Text = "Alphabetischer Roster (Spieler A–Z)", AutoSize = true, Checked = true };
+    private readonly RadioButton _clothing = new() { Text = "Rosterbekleidung (Größen je Spieler)", AutoSize = true };
+    private readonly RadioButton _clubs = new() { Text = "Roster Vereine (ID, Name, Verein)", AutoSize = true };
     private readonly RadioButton _ifaf = new() { Text = "IFAF-Roster (Spieler + Staff + Unterschriftszeilen)", AutoSize = true };
     private readonly ComboBox _kader = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300 };
     private readonly TextBox _competition = new() { Width = 300, Text = "IFAF European Championship 2026/27" };
@@ -35,6 +37,8 @@ public sealed class RosterForm : Form
 
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(20), AutoScroll = true };
         layout.Controls.Add(_alpha);
+        layout.Controls.Add(_clothing);
+        layout.Controls.Add(_clubs);
         layout.Controls.Add(_ifaf);
 
         _alphaBox.Controls.Add(new Label { Text = "Welche Spieler?", AutoSize = true, Location = new Point(0, 10) });
@@ -63,11 +67,13 @@ public sealed class RosterForm : Form
 
         EventHandler switchMode = (_, _) =>
         {
-            _alphaBox.Visible = _alpha.Checked;
+            _alphaBox.Visible = _alpha.Checked || _clothing.Checked || _clubs.Checked;
             _ifafBox.Visible = _ifaf.Checked;
         };
         _alpha.CheckedChanged += switchMode;
         _ifaf.CheckedChanged += switchMode;
+        _clothing.CheckedChanged += switchMode;
+        _clubs.CheckedChanged += switchMode;
         _pdf.Click += async (_, _) => await CreateAsync("pdf");
         _excel.Click += async (_, _) => await CreateAsync("xlsx");
     }
@@ -87,7 +93,7 @@ public sealed class RosterForm : Form
         }
 
         var ext = format == "pdf" ? "pdf" : "xlsx";
-        var suggestion = (_ifaf.Checked ? "IFAF-Roster-" + (_team.Text.Trim().Length > 0 ? _team.Text.Trim() : "Team") : "Roster-alphabetisch")
+        var suggestion = (_ifaf.Checked ? "IFAF-Roster-" + (_team.Text.Trim().Length > 0 ? _team.Text.Trim() : "Team") : _clubs.Checked ? "Roster-Vereine" : _clothing.Checked ? "Roster-Bekleidung" : "Roster-alphabetisch")
                          + $"-{DateTime.Now:yyyy-MM-dd}.{ext}";
         using var dialog = new SaveFileDialog
         {
@@ -101,7 +107,7 @@ public sealed class RosterForm : Form
         _status.Text = "Roster wird erstellt …";
         try
         {
-            var data = await _api.DownloadRosterAsync(_ifaf.Checked, format, query);
+            var data = await _api.DownloadRosterAsync(_ifaf.Checked ? "-ifaf" : _clothing.Checked ? "-bekleidung" : _clubs.Checked ? "-vereine" : "", format, query);
             await File.WriteAllBytesAsync(dialog.FileName, data);
             _status.ForeColor = Theme.Green;
             _status.Text = "Gespeichert: " + dialog.FileName;

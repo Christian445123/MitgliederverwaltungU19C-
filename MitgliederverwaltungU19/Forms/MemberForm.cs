@@ -118,7 +118,7 @@ public sealed class MemberForm : Form
 
     private Control BuildDocumentsPanel()
     {
-        var box = new GroupBox { Text = "Dokumente (PDF, JPG, PNG – max. 5 MB)", Dock = DockStyle.Bottom, Height = 30 + DocumentTypes.All.Count * 36, Padding = new Padding(10, 6, 10, 6) };
+        var box = new GroupBox { Text = "Dokumente (PDF, JPG, PNG – max. 15 MB)", Dock = DockStyle.Bottom, Height = 30 + DocumentTypes.All.Count * 36, Padding = new Padding(10, 6, 10, 6) };
         var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = DocumentTypes.All.Count };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));

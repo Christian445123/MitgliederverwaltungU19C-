@@ -38,9 +38,7 @@ public sealed class ExpiryForm : Form
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
         };
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.NavyLight;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.NavyLight;
+        Theme.StyleGrid(grid);
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Name", FillWeight = 30 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Dokument", FillWeight = 20 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ablaufdatum", FillWeight = 16 });

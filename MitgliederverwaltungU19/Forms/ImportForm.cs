@@ -82,10 +82,7 @@ public sealed class ImportForm : Form
         _grid.RowHeadersVisible = false;
         _grid.BackgroundColor = Color.White;
         _grid.BorderStyle = BorderStyle.None;
-        _grid.EnableHeadersVisualStyles = false;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.NavyLight;
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.NavyLight;
+        Theme.StyleGrid(_grid);
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Zeile", FillWeight = 7 });

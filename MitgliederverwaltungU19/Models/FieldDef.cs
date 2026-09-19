@@ -76,9 +76,11 @@ public static class DocumentTypes
 {
     public static readonly IReadOnlyList<(string Key, string Label)> All = new List<(string, string)>
     {
-        ("ecard", "E-Card"),
-        ("pass", "Reisepass / Pass-Foto"),
-        ("nada", "NADA-Zertifikat"),
+        ("ecard", "E-Card Vorderseite"),
+        ("ecard_back", "E-Card Rückseite"),
+        ("pass", "Reisepass Vorderseite"),
+        ("pass_back", "Reisepass Rückseite"),
+        ("nada", "NADA-Zertifikat (1 Seite)"),
         ("rechte", "Rechte & Pflichten (unterschrieben)"),
     };
 }

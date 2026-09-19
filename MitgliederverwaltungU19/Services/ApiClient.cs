@@ -161,11 +161,65 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"members/{id}", null, ct);
     }
 
-    /// <summary>Lädt einen Roster (PDF/Excel) vom Server. type: "alpha" oder "ifaf".</summary>
-    public Task<byte[]> DownloadRosterAsync(bool ifaf, string format, IDictionary<string, string> query, CancellationToken ct = default)
+    /// <summary>Lädt alle Staff-Mitglieder (Feldname → Textwert).</summary>
+    public async Task<List<Dictionary<string, string?>>> ListStaffAsync(CancellationToken ct = default)
+    {
+        var result = new List<Dictionary<string, string?>>();
+        var offset = 0;
+        while (true)
+        {
+            using var doc = await SendJsonAsync(HttpMethod.Get, $"staff?limit=500&offset={offset}", null, ct);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || !doc.RootElement.TryGetProperty("total", out var totalEl))
+            {
+                throw new ApiException("Die API auf dem Server kennt \"staff\" noch nicht. Bitte die aktuelle Version einspielen (Änderungen einspielen / git pull).");
+            }
+            foreach (var e in data.EnumerateArray())
+            {
+                var row = new Dictionary<string, string?>();
+                foreach (var p in e.EnumerateObject())
+                {
+                    if (p.Name == "dokumente" && p.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        row["dokument_rechte"] = p.Value.TryGetProperty("rechte", out var r) && r.ValueKind == JsonValueKind.True ? "true" : "false";
+                        continue;
+                    }
+                    row[p.Name] = p.Value.ValueKind switch
+                    {
+                        JsonValueKind.Null => null,
+                        JsonValueKind.Object or JsonValueKind.Array => p.Value.GetRawText(),
+                        JsonValueKind.Number => p.Value.GetRawText(),
+                        JsonValueKind.True => "true",
+                        JsonValueKind.False => "false",
+                        _ => p.Value.GetString(),
+                    };
+                }
+                result.Add(row);
+            }
+            offset += data.GetArrayLength();
+            if (data.GetArrayLength() == 0 || offset >= totalEl.GetInt32()) break;
+        }
+        return result;
+    }
+
+    /// <summary>Speichert eine Person und liefert ihre ID.</summary>
+    public async Task<int> SaveStaffAsync(int? id, JsonObject payload, CancellationToken ct = default)
+    {
+        using var doc = id is null
+            ? await SendJsonAsync(HttpMethod.Post, "staff", payload, ct)
+            : await SendJsonAsync(HttpMethod.Put, $"staff/{id}", payload, ct);
+        return doc.RootElement.GetProperty("id").GetInt32();
+    }
+
+    public async Task DeleteStaffAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"staff/{id}", null, ct);
+    }
+
+    /// <summary>Lädt einen Roster (PDF/Excel) vom Server. type: "", "-ifaf" oder "-bekleidung".</summary>
+    public Task<byte[]> DownloadRosterAsync(string kind, string format, IDictionary<string, string> query, CancellationToken ct = default)
     {
         var qs = string.Join("&", query.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
-        var path = (ifaf ? "roster-ifaf." : "roster.") + format + (qs.Length > 0 ? "?" + qs : "");
+        var path = "roster" + kind + "." + format + (qs.Length > 0 ? "?" + qs : "");
         return DownloadAsync(path, ct);
     }
 
@@ -205,9 +259,9 @@ public sealed class ApiClient : IDisposable
     }
 
     /// <summary>Lädt ein Dokument herunter und liefert Inhalt und Dateiendung.</summary>
-    public async Task<(byte[] Data, string Extension)> DownloadDocumentAsync(int memberId, string type, CancellationToken ct = default)
+    public async Task<(byte[] Data, string Extension)> DownloadDocumentAsync(int memberId, string type, CancellationToken ct = default, string kind = "members")
     {
-        using var response = await SendAsync(() => _http.GetAsync(Endpoint($"members/{memberId}/documents/{type}"), ct));
+        using var response = await SendAsync(() => _http.GetAsync(Endpoint($"{kind}/{memberId}/documents/{type}"), ct));
         if (!response.IsSuccessStatusCode)
         {
             EnsureSuccess(response, await response.Content.ReadAsStringAsync(ct));
@@ -222,17 +276,17 @@ public sealed class ApiClient : IDisposable
         return (await response.Content.ReadAsByteArrayAsync(ct), ext);
     }
 
-    public async Task UploadDocumentAsync(int memberId, string type, string filePath, CancellationToken ct = default)
+    public async Task UploadDocumentAsync(int memberId, string type, string filePath, CancellationToken ct = default, string kind = "members")
     {
         using var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(filePath, ct)), "file", Path.GetFileName(filePath));
-        using var response = await SendAsync(() => _http.PostAsync(Endpoint($"members/{memberId}/documents/{type}"), form, ct));
+        using var response = await SendAsync(() => _http.PostAsync(Endpoint($"{kind}/{memberId}/documents/{type}"), form, ct));
         EnsureSuccess(response, await response.Content.ReadAsStringAsync(ct));
     }
 
-    public async Task DeleteDocumentAsync(int memberId, string type, CancellationToken ct = default)
+    public async Task DeleteDocumentAsync(int memberId, string type, CancellationToken ct = default, string kind = "members")
     {
-        using var _ = await SendJsonAsync(HttpMethod.Delete, $"members/{memberId}/documents/{type}", null, ct);
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"{kind}/{memberId}/documents/{type}", null, ct);
     }
 
     /// <summary>
