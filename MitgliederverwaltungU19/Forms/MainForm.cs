@@ -19,6 +19,9 @@ public sealed class MainForm : Form
 
     private List<Member> _all = new();
     private DeployForm? _deployForm;
+    private readonly Panel _banner = new() { Dock = DockStyle.Top, Height = 40, BackColor = Color.FromArgb(0xFF, 0xF2, 0xE6), Visible = false };
+    private readonly Label _bannerText = new() { AutoSize = true, Location = new Point(16, 11), Font = Theme.Bold };
+    private bool _expiryAnnounced;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
     {
@@ -150,7 +153,7 @@ public sealed class MainForm : Form
         _grid.RowTemplate.Height = 30;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-        AddColumn("name", "Name", 22);
+        AddColumn("name", "Name & Vorname", 22);
         AddColumn("verein", "Verein", 18);
         AddColumn("position", "Position", 12);
         AddColumn("jersey", "Jersey", 7);
@@ -159,6 +162,8 @@ public sealed class MainForm : Form
         AddColumn("status", "Status", 8);
         AddColumn("kader", "Kader", 11);
         AddColumn("bestaetigt", "Bestätigt", 9);
+        AddColumn("nada", "NADA gültig bis", 10);
+        AddColumn("pass", "Pass gültig bis", 10);
         _grid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex >= 0 && SelectedMember() is { } m) await OpenEditorAsync(m);
@@ -168,6 +173,12 @@ public sealed class MainForm : Form
             if (e.KeyCode == Keys.Enter) { e.Handled = true; if (SelectedMember() is { } m) await OpenEditorAsync(m); }
         };
 
+        var showExpiry = Theme.MakeButton("Anzeigen");
+        showExpiry.Dock = DockStyle.Right;
+        showExpiry.Margin = new Padding(0);
+        showExpiry.Click += (_, _) => ShowExpiry();
+        _banner.Controls.Add(showExpiry);
+        _banner.Controls.Add(_bannerText);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 30, Padding = new Padding(14, 0, 14, 0), BackColor = Color.White };
         footer.Controls.Add(_footer);
         tools.Controls.Add(_stats);
@@ -177,6 +188,7 @@ public sealed class MainForm : Form
 
         Controls.Add(body);
         Controls.Add(footer);
+        Controls.Add(_banner);
         Controls.Add(tools);
         Controls.Add(header);
     }
@@ -203,6 +215,7 @@ public sealed class MainForm : Form
         {
             _all = await _api.ListAllAsync();
             ApplyFilter();
+            UpdateExpiryBanner();
         }
         catch (Exception ex)
         {
@@ -237,9 +250,12 @@ public sealed class MainForm : Form
                 m.FullName, m.Get("verein"), m.Get("position"), m.Get("jersey_nr"), m.Get("email"),
                 m.Get("telefon"), m.Get("status") == "inaktiv" ? "Inaktiv" : "Aktiv",
                 m.Get("kader") == "nicht_im_kader" ? "nicht im Kader" : "Im Kader",
-                m.ConfirmedAt is null ? "ausstehend" : "✓ " + FormatDate(m.ConfirmedAt));
+                m.ConfirmedAt is null ? "ausstehend" : "✓ " + FormatDate(m.ConfirmedAt),
+                FormatExpiry(Expiry.Nada(m)), FormatExpiry(Expiry.Pass(m)));
             var row = _grid.Rows[idx];
             row.Tag = m;
+            MarkExpiry(row.Cells["nada"], Expiry.Nada(m));
+            MarkExpiry(row.Cells["pass"], Expiry.Pass(m));
             if (m.ConfirmedAt is null) row.Cells["bestaetigt"].Style.ForeColor = Theme.AccentDark;
             else row.Cells["bestaetigt"].Style.ForeColor = Theme.Green;
             if (m.Get("status") == "inaktiv") row.DefaultCellStyle.ForeColor = Theme.Muted;
@@ -268,6 +284,56 @@ public sealed class MainForm : Form
         }
     }
 
+
+    // ── Ablauf-Erinnerungen (NADA-Zertifikat, Reisepass) ──────────────────
+
+    private static string FormatExpiry((ExpiryState State, int Days, DateTime? Date) e) =>
+        e.Date is { } d ? d.ToString("dd.MM.yyyy") : "";
+
+    private static void MarkExpiry(DataGridViewCell cell, (ExpiryState State, int Days, DateTime? Date) e)
+    {
+        if (e.State == ExpiryState.Ok) return;
+        var (back, fore) = Expiry.Colors(e.State);
+        cell.Style.BackColor = back;
+        cell.Style.ForeColor = fore;
+        cell.ToolTipText = e.Days < 0 ? $"abgelaufen seit {Math.Abs(e.Days)} Tag(en)"
+            : e.Days == 0 ? "läuft heute ab"
+            : $"läuft in {e.Days} Tag(en) ab";
+    }
+
+    private void UpdateExpiryBanner()
+    {
+        var items = Expiry.Find(_all);
+        if (items.Count == 0)
+        {
+            _banner.Visible = false;
+            return;
+        }
+
+        var expired = items.Count(i => i.State == ExpiryState.Expired);
+        var nada = items.Count(i => i.Document == "NADA-Zertifikat");
+        var pass = items.Count - nada;
+        _bannerText.Text = $"⚠ {expired} abgelaufen, {items.Count - expired} laufen bald ab – NADA-Zertifikate: {nada}, Reisepässe: {pass}";
+        _bannerText.ForeColor = expired > 0 ? Theme.Danger : Theme.AccentDark;
+        _banner.Visible = true;
+
+        // Beim Start einmal aktiv melden
+        if (!_expiryAnnounced)
+        {
+            _expiryAnnounced = true;
+            var lines = items.Take(12).Select(i => $"• {i.Member.FullName} – {i.Document}: {i.Date:dd.MM.yyyy} ({i.Describe()})");
+            var more = items.Count > 12 ? $"\n… und {items.Count - 12} weitere (Button „Anzeigen“)" : "";
+            MessageBox.Show(this,
+                $"Ablaufende Dokumente:\n\n{string.Join("\n", lines)}{more}",
+                "Ablauf-Erinnerung", MessageBoxButtons.OK, expired > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+        }
+    }
+
+    private void ShowExpiry()
+    {
+        using var form = new ExpiryForm(Expiry.Find(_all));
+        form.ShowDialog(this);
+    }
     private List<Member> SelectedMembers() =>
         _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<Member>().ToList();
 

@@ -15,7 +15,8 @@ public sealed class Member
 
     public string Get(string key) => Values.TryGetValue(key, out var v) ? v ?? "" : "";
 
-    public string FullName => $"{Get("nachname")}, {Get("vorname")}";
+    /// <summary>Automatisch gebildeter Name "Nachname Vorname" (z. B. "Walch Jakob").</summary>
+    public string FullName => $"{Get("nachname")} {Get("vorname")}".Trim();
 
     public static Member FromJson(JsonElement e)
     {

@@ -19,7 +19,7 @@ public static class Fields
         new("nachname", "Nachname", FieldType.Text, GStamm, true),
         new("vorname", "Vorname", FieldType.Text, GStamm, true),
         new("jersey_nr", "Jersey Nr.", FieldType.Text, GStamm),
-        new("sz", "SZ", FieldType.Text, GStamm),
+        new("sz", "Selbstzahler", FieldType.Text, GStamm),
         new("bezirk", "Bezirk", FieldType.Text, GStamm),
         new("position", "Position", FieldType.Text, GStamm),
         new("geburtsdatum", "Geburtsdatum", FieldType.Date, GStamm),
