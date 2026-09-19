@@ -37,6 +37,11 @@ public sealed class MappingForm : Form
 
         var labels = new List<string> { Skip };
         labels.AddRange(response.Fields.Select(f => f.Label));
+        // Sicherheitsnetz: jede vom Server gemeldete Zuordnung muss in der Auswahlliste vorkommen
+        foreach (var col in response.Columns)
+        {
+            if (col.Field is not null && !labels.Contains(col.Field)) labels.Add(col.Field);
+        }
 
         _grid.Dock = DockStyle.Fill;
         _grid.AllowUserToAddRows = false;
@@ -50,6 +55,7 @@ public sealed class MappingForm : Form
         _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.NavyLight;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.RowTemplate.Height = 28;
+        _grid.DataError += (_, e) => e.ThrowException = false; // ungültige Zellwerte nicht als Standarddialog anzeigen
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Spalte in der Datei", ReadOnly = true, FillWeight = 38 });
         _grid.Columns.Add(new DataGridViewComboBoxColumn
         {

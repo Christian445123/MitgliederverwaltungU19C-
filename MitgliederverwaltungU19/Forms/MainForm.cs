@@ -18,6 +18,7 @@ public sealed class MainForm : Form
     private readonly List<Button> _writeButtons = new();
 
     private List<Member> _all = new();
+    private DeployForm? _deployForm;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
     {
@@ -84,7 +85,9 @@ public sealed class MainForm : Form
         var refresh = Theme.MakeButton("Aktualisieren");
         var add = Theme.MakeButton("+ Neues Mitglied", primary: true);
         var edit = Theme.MakeButton("Bearbeiten");
-        var delete = Theme.MakeButton("Löschen");
+        var delete = Theme.MakeButton("Auswahl löschen");
+        var deleteAll = Theme.MakeButton("Alle löschen …");
+        deleteAll.ForeColor = Theme.Danger;
         var import = Theme.MakeButton("Import …");
         var export = Theme.MakeButton("Export CSV");
         var settings = Theme.MakeButton("Einstellungen");
@@ -94,14 +97,28 @@ public sealed class MainForm : Form
         add.Click += async (_, _) => await OpenEditorAsync(null);
         edit.Click += async (_, _) => { if (SelectedMember() is { } m) await OpenEditorAsync(m); };
         delete.Click += async (_, _) => await DeleteSelectedAsync();
+        deleteAll.Click += async (_, _) => await DeleteAllAsync();
+        deleteAll.Enabled = _ping.CanWrite;
         import.Click += async (_, _) => await OpenImportAsync();
         export.Click += async (_, _) => await ExportAsync();
         settings.Click += (_, _) => OpenSettings();
-        deploy.Click += (_, _) => { using var form = new DeployForm(_settings, _api); form.ShowDialog(this); };
+        deploy.Click += (_, _) =>
+        {
+            // Nicht-modal: Das Fenster darf für die Automatik geöffnet bleiben, während die App weiter benutzt wird
+            if (_deployForm is null || _deployForm.IsDisposed)
+            {
+                _deployForm = new DeployForm(_settings, _api);
+                _deployForm.Show(this);
+            }
+            else
+            {
+                _deployForm.Activate();
+            }
+        };
         deploy.Enabled = _ping.CanWrite;
         _writeButtons.AddRange(new[] { add, edit, delete, import });
 
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, deploy, settings });
+        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, deleteAll, deploy, settings });
         if (!_ping.CanWrite)
         {
             foreach (var b in _writeButtons) b.Enabled = false;
@@ -113,7 +130,7 @@ public sealed class MainForm : Form
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
         _grid.AllowUserToResizeRows = false;
-        _grid.MultiSelect = false;
+        _grid.MultiSelect = true;
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.BackgroundColor = Theme.Background;
@@ -251,21 +268,92 @@ public sealed class MainForm : Form
         }
     }
 
+    private List<Member> SelectedMembers() =>
+        _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<Member>().ToList();
+
     private async Task DeleteSelectedAsync()
     {
-        var m = SelectedMember();
-        if (m is null) return;
-        var answer = MessageBox.Show(this, $"Mitglied „{m.FullName}“ wirklich unwiderruflich löschen?",
-            "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        var selected = SelectedMembers();
+        if (selected.Count == 0) return;
+
+        var text = selected.Count == 1
+            ? $"Mitglied „{selected[0].FullName}“ wirklich unwiderruflich löschen?"
+            : $"{selected.Count} ausgewählte Mitglieder wirklich unwiderruflich löschen?\n\n" +
+              string.Join("\n", selected.Take(8).Select(m => "• " + m.FullName)) +
+              (selected.Count > 8 ? $"\n… und {selected.Count - 8} weitere" : "");
+        var answer = MessageBox.Show(this, text, "Löschen", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (answer != DialogResult.Yes) return;
+
         try
         {
-            await _api.DeleteAsync(m.Id);
+            UseWaitCursor = true;
+            var deleted = await _api.DeleteManyAsync(selected.Select(m => m.Id));
+            _footer.Text = $"{deleted} Mitglied(er) gelöscht.";
             await ReloadAsync();
         }
         catch (Exception ex)
         {
             Theme.ShowError(this, ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task DeleteAllAsync()
+    {
+        const string phrase = "ALLE LÖSCHEN";
+        using var dialog = new Form
+        {
+            Text = "Alle Daten löschen",
+            Font = Theme.Body,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            ClientSize = new Size(480, 230),
+        };
+        var warning = new Label
+        {
+            AutoSize = false,
+            Location = new Point(18, 16),
+            Size = new Size(444, 100),
+            ForeColor = Theme.Danger,
+            Text = $"ACHTUNG: Es werden ALLE {_all.Count} Mitglieder mit allen Angaben und allen hochgeladenen Dokumenten endgültig gelöscht. " +
+                   "Das kann nicht rückgängig gemacht werden.\n\nTipp: Vorher über „Export CSV“ eine Sicherung speichern.",
+        };
+        var prompt = new Label { AutoSize = true, Location = new Point(18, 124), Text = $"Zur Bestätigung „{phrase}“ eingeben:" };
+        var input = new TextBox { Location = new Point(18, 148), Width = 444 };
+        var ok = Theme.MakeButton("Alles löschen");
+        ok.BackColor = Theme.Danger;
+        ok.ForeColor = Color.White;
+        ok.Enabled = false;
+        ok.Location = new Point(18, 184);
+        var cancel = Theme.MakeButton("Abbrechen");
+        cancel.Location = new Point(150, 184);
+        input.TextChanged += (_, _) => ok.Enabled = input.Text.Trim() == phrase;
+        ok.Click += (_, _) => dialog.DialogResult = DialogResult.OK;
+        cancel.Click += (_, _) => dialog.DialogResult = DialogResult.Cancel;
+        dialog.CancelButton = cancel;
+        dialog.Controls.AddRange(new Control[] { warning, prompt, input, ok, cancel });
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            UseWaitCursor = true;
+            var deleted = await _api.DeleteAllAsync();
+            _footer.Text = $"Alle Daten gelöscht ({deleted}).";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(this, ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
         }
     }
 

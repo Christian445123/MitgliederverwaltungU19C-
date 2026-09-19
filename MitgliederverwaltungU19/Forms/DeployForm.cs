@@ -13,6 +13,11 @@ public sealed class DeployForm : Form
     private readonly CheckBox _pullServer = new() { Text = "Danach den Server aktualisieren (git pull)", Checked = true, AutoSize = true };
     private readonly TextBox _log = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Font = new Font("Consolas", 9.5f), Dock = DockStyle.Fill };
     private readonly Button _deploy = Theme.MakeButton("Committen && Pushen", primary: true);
+    private readonly CheckBox _autoMessage = new() { Text = "Kommentar automatisch erzeugen, wenn das Feld leer ist", Checked = true, AutoSize = true };
+    private readonly CheckBox _auto = new() { Text = "Automatisch einspielen, sobald sich Dateien ändern (solange dieses Fenster offen ist)", AutoSize = true };
+    private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 15000 };
+    private FileSystemWatcher? _watcher;
+    private bool _busy;
     private GitService? _git;
 
     public DeployForm(AppSettings settings, ApiClient api)
@@ -30,11 +35,23 @@ public sealed class DeployForm : Form
         var changeRepo = Theme.MakeButton("Ordner ändern …");
         var refresh = Theme.MakeButton("Aktualisieren");
         var close = Theme.MakeButton("Schließen");
-        changeRepo.Click += async (_, _) => { if (ChooseRepo()) await ReloadAsync(); };
+        changeRepo.Click += async (_, _) => { if (ChooseRepo()) { await ReloadAsync(); ApplyAutoMode(); } };
         refresh.Click += async (_, _) => await ReloadAsync();
         close.Click += (_, _) => Close();
         _deploy.Click += async (_, _) => await DeployAsync();
         _message.PlaceholderText = "Kommentar zur Änderung, z. B. „Fix: Telefonnummer wird formatiert“";
+        _debounce.Tick += async (_, _) => { _debounce.Stop(); await DeployAsync(automatic: true); };
+        _auto.CheckedChanged += (_, _) =>
+        {
+            if (_auto.Checked && MessageBox.Show(this,
+                    "Ab jetzt wird 15 Sekunden nach der letzten Dateiänderung automatisch committet (Kommentar wird erzeugt), zu GitHub gepusht und – falls angehakt – der Server aktualisiert.\n\nDas gilt nur, solange dieses Fenster geöffnet bleibt. Aktivieren?",
+                    "Automatik", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                _auto.Checked = false;
+                return;
+            }
+            ApplyAutoMode();
+        };
 
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(14, 12, 14, 0), FlowDirection = FlowDirection.TopDown, WrapContents = false };
         top.Controls.Add(new Label { Text = "Web-Projekt (Git-Ordner):", Font = Theme.Bold, AutoSize = true });
@@ -46,8 +63,12 @@ public sealed class DeployForm : Form
         var changesBox = new GroupBox { Text = "Geänderte Dateien", Dock = DockStyle.Top, Height = 180, Padding = new Padding(8) };
         changesBox.Controls.Add(_changes);
 
-        var messageBox = new Panel { Dock = DockStyle.Top, Height = 84, Padding = new Padding(14, 8, 14, 0) };
+        var messageBox = new Panel { Dock = DockStyle.Top, Height = 136, Padding = new Padding(14, 8, 14, 0) };
         _message.Margin = new Padding(0);
+        messageBox.Controls.Add(_auto);
+        _auto.Dock = DockStyle.Bottom;
+        messageBox.Controls.Add(_autoMessage);
+        _autoMessage.Dock = DockStyle.Bottom;
         messageBox.Controls.Add(_pullServer);
         _pullServer.Dock = DockStyle.Bottom;
         messageBox.Controls.Add(_message);
@@ -128,26 +149,71 @@ public sealed class DeployForm : Form
         _log.AppendText(text.Replace("\r\n", "\n").Replace("\n", Environment.NewLine) + Environment.NewLine);
     }
 
-    private async Task DeployAsync()
+    /// <summary>Erzeugt einen Commit-Kommentar aus der Liste der geänderten Dateien.</summary>
+    private static string BuildAutoMessage(string status)
     {
-        if (_git is null) return;
+        var files = status.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(l => l.Length > 3 ? l[3..].Trim().Trim('"') : l)
+            .ToList();
+        if (files.Count == 0) return $"Update {DateTime.Now:yyyy-MM-dd HH:mm}";
+        var names = string.Join(", ", files.Take(3).Select(f => Path.GetFileName(f.TrimEnd('/', '\\'))));
+        var more = files.Count > 3 ? $" (+{files.Count - 3} weitere)" : "";
+        return $"Update: {names}{more} – {DateTime.Now:yyyy-MM-dd HH:mm}";
+    }
+
+    private static bool ContainsEnvFile(string status) =>
+        status.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(l => l.Length > 3 && Path.GetFileName(l[3..].Trim().Trim('"')).Equals(".env", StringComparison.OrdinalIgnoreCase));
+
+    private async Task DeployAsync(bool automatic = false)
+    {
+        if (_git is null || _busy) return;
+
+        string status;
+        try
+        {
+            status = await _git.StatusAsync();
+        }
+        catch (Exception ex)
+        {
+            Log("Fehler: " + ex.Message);
+            return;
+        }
+        if (automatic && status.Length == 0) return; // nichts zu tun
+
         var message = _message.Text.Trim();
         if (message.Length == 0)
         {
-            MessageBox.Show(this, "Bitte einen Kommentar für den Commit eingeben.", "Kommentar fehlt", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            _message.Focus();
-            return;
-        }
-        if (_changes.Text.Contains(".env", StringComparison.Ordinal)
-            && MessageBox.Show(this, "In der Änderungsliste steht eine Datei mit „.env“. Sie enthält normalerweise Passwörter und darf nicht ins Repository.\n\nTrotzdem fortfahren?",
-                "Achtung", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-        {
-            return;
+            if (_autoMessage.Checked || automatic)
+            {
+                message = BuildAutoMessage(status);
+            }
+            else
+            {
+                MessageBox.Show(this, "Bitte einen Kommentar für den Commit eingeben (oder „Kommentar automatisch erzeugen“ aktivieren).", "Kommentar fehlt", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _message.Focus();
+                return;
+            }
         }
 
+        if (ContainsEnvFile(status))
+        {
+            if (automatic)
+            {
+                Log($"[{DateTime.Now:T}] Automatik pausiert: Die Änderungsliste enthält eine .env-Datei (Passwörter). Bitte prüfen.");
+                return;
+            }
+            if (MessageBox.Show(this, "In der Änderungsliste steht eine Datei „.env“. Sie enthält normalerweise Passwörter und darf nicht ins Repository.\n\nTrotzdem fortfahren?",
+                    "Achtung", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            {
+                return;
+            }
+        }
+
+        _busy = true;
         _deploy.Enabled = false;
         UseWaitCursor = true;
-        _log.Clear();
+        if (automatic) Log($"── Automatisch {DateTime.Now:T} ──"); else _log.Clear();
         try
         {
             var pushed = await _git.CommitAndPushAsync(message, Log);
@@ -173,8 +239,53 @@ public sealed class DeployForm : Form
         }
         finally
         {
+            _busy = false;
             UseWaitCursor = false;
             await ReloadAsync();
         }
+    }
+
+    // ── Automatik: bei Dateiänderungen selbst committen, pushen und den Server aktualisieren ──
+
+    private void ApplyAutoMode()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _debounce.Stop();
+        if (!_auto.Checked || !GitService.IsRepository(_settings.RepoPath)) return;
+
+        _watcher = new FileSystemWatcher(_settings.RepoPath)
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size,
+            EnableRaisingEvents = true,
+        };
+        FileSystemEventHandler handler = (_, e) => OnFileChanged(e.FullPath);
+        _watcher.Changed += handler;
+        _watcher.Created += handler;
+        _watcher.Deleted += handler;
+        _watcher.Renamed += (_, e) => OnFileChanged(e.FullPath);
+        Log($"[{DateTime.Now:T}] Automatik an: Änderungen werden {_debounce.Interval / 1000} Sekunden nach der letzten Dateiänderung eingespielt.");
+    }
+
+    private void OnFileChanged(string path)
+    {
+        var p = path.Replace('\\', '/');
+        if (p.Contains("/.git/") || p.EndsWith("/.git") || p.Contains("/uploads/") || p.Contains("/logs/")
+            || p.EndsWith("~") || p.EndsWith(".tmp") || p.Contains("/.dropbox"))
+        {
+            return;
+        }
+        if (IsHandleCreated && !IsDisposed)
+        {
+            BeginInvoke(() => { _debounce.Stop(); _debounce.Start(); });
+        }
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _watcher?.Dispose();
+        _debounce.Dispose();
+        base.OnFormClosed(e);
     }
 }

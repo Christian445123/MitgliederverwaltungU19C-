@@ -16,7 +16,9 @@ public sealed class ImportForm : Form
     private readonly ApiClient _api;
     private readonly TextBox _path = new() { ReadOnly = true, Dock = DockStyle.Fill };
     private readonly CheckBox _update = new() { Text = "Vorhandene Mitglieder (gleiche E-Mail) aktualisieren – leere Zellen überschreiben nichts", Checked = true, AutoSize = true };
-    private readonly ComboBox _kader = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 380 };
+    private readonly RadioButton _kaderIn = new() { Text = "Alle importierten Spieler sind im Kader", AutoSize = true };
+    private readonly RadioButton _kaderOut = new() { Text = "Alle importierten Spieler sind nicht im Kader", AutoSize = true };
+    private readonly RadioButton _kaderFile = new() { Text = "Aus der Datei übernehmen (Spalte „Kader“), sonst „Im Kader“", AutoSize = true, Checked = true };
     private readonly DataGridView _grid = new();
     private readonly Label _summary = new() { AutoSize = true, MaximumSize = new Size(820, 0), Margin = new Padding(0, 6, 0, 6) };
     private readonly Button _preview = Theme.MakeButton("Vorschau");
@@ -67,10 +69,11 @@ public sealed class ImportForm : Form
         });
         options.Controls.Add(_update);
         options.Controls.Add(new Label { Text = "Kader-Status der importierten Spieler:", AutoSize = true, Margin = new Padding(0, 8, 0, 2) });
-        _kader.Items.AddRange(new object[] { "Aus der Datei (Spalte „Kader“), sonst „Im Kader“", "Alle als „Im Kader“ importieren", "Alle als „Spieler nicht im Kader“ importieren" });
-        _kader.SelectedIndex = 0;
-        _kader.SelectedIndexChanged += (_, _) => { if (_file is not null) _ = RunAsync(commit: false); };
-        options.Controls.Add(_kader);
+        foreach (var radio in new[] { _kaderIn, _kaderOut, _kaderFile })
+        {
+            radio.CheckedChanged += (_, _) => { if (radio.Checked && _file is not null) _ = RunAsync(commit: false); };
+            options.Controls.Add(radio);
+        }
         options.Controls.Add(_summary);
 
         _grid.Dock = DockStyle.Fill;
@@ -184,11 +187,16 @@ public sealed class ImportForm : Form
         }
     }
 
-    private string? KaderDefault() => _kader.SelectedIndex switch { 1 => "kader", 2 => "nicht_im_kader", _ => null };
+    private string? KaderDefault() => _kaderIn.Checked ? "kader" : _kaderOut.Checked ? "nicht_im_kader" : null;
 
     private async void ShowMapping()
     {
         if (_last is null) return;
+        if (_last.Fields.Count == 0)
+        {
+            MessageBox.Show(this, "Der Server unterstützt die manuelle Spaltenzuordnung noch nicht (alte Version). Bitte zuerst die Web-Anwendung auf dem Server aktualisieren (git pull).", "Server veraltet", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         using var form = new MappingForm(_last);
         if (form.ShowDialog(this) != DialogResult.OK) return;
         _overrides = new Dictionary<int, string>(form.Mapping);

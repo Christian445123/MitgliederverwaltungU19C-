@@ -140,6 +140,22 @@ public sealed class ApiClient : IDisposable
         return Member.FromJson(doc.RootElement);
     }
 
+    /// <summary>Löscht mehrere Mitglieder. Liefert die Anzahl gelöschter Mitglieder.</summary>
+    public async Task<int> DeleteManyAsync(IEnumerable<int> ids, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["ids"] = new JsonArray(ids.Select(i => (JsonNode?)JsonValue.Create(i)).ToArray()) };
+        using var doc = await SendJsonAsync(HttpMethod.Post, "members/bulk-delete", body, ct);
+        return doc.RootElement.GetProperty("deleted").GetInt32();
+    }
+
+    /// <summary>Löscht ALLE Mitglieder (nach ausdrücklicher Bestätigung). Liefert die Anzahl.</summary>
+    public async Task<int> DeleteAllAsync(CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["all"] = true, ["confirm"] = "ALLE LÖSCHEN" };
+        using var doc = await SendJsonAsync(HttpMethod.Post, "members/bulk-delete", body, ct);
+        return doc.RootElement.GetProperty("deleted").GetInt32();
+    }
+
     public async Task DeleteAsync(int id, CancellationToken ct = default)
     {
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"members/{id}", null, ct);
