@@ -571,17 +571,34 @@ public sealed class MainForm : Form
         .OrderBy(m => m.FullName, StringComparer.CurrentCultureIgnoreCase)
         .ToList();
 
-    private void ShowExpiry()
+    /// <summary>Staff für die Dokumenten-Fenster (ohne Recht „Staff ansehen“ oder bei Fehlern leer).</summary>
+    private async Task<IReadOnlyList<Dictionary<string, string?>>> LoadStaffAsync()
     {
-        using var form = new ExpiryForm(Expiry.Find(_all));
+        if (!_ping.Can("staff.view")) return Array.Empty<Dictionary<string, string?>>();
+        try
+        {
+            return await _api.ListStaffAsync();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<Dictionary<string, string?>>();
+        }
+    }
+
+    private async void ShowExpiry()
+    {
+        var staff = await LoadStaffAsync();
+        using var form = new ExpiryForm(_api, Expiry.Find(_all), staff);
         form.ShowDialog(this);
     }
 
-    private void ShowMissing()
+    private async void ShowMissing()
     {
-        using var form = new MissingDocsForm(MissingDocuments());
+        var staff = await LoadStaffAsync();
+        using var form = new MissingDocsForm(_api, MissingDocuments(), staff);
         form.ShowDialog(this);
     }
+
     private static VerifyPerson ToVerifyPerson(Member m) =>
         new(m.Id, m.FullName, m.Get("status") != "inaktiv", m.Get("email").Length > 0, m.ConfirmedAt is not null);
 

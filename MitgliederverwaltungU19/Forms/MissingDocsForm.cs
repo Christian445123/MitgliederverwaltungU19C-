@@ -3,44 +3,34 @@ using MitgliederverwaltungU19.Services;
 
 namespace MitgliederverwaltungU19.Forms;
 
-/// <summary>Liste der Spieler, bei denen NADA-Zertifikat, Reisepass, E-Card oder Rechte &amp; Pflichten fehlen.</summary>
+/// <summary>
+/// Fehlende Dokumente, Spieler und Staff getrennt (zwei Register). Spieler: NADA-Zertifikat, Reisepass, E-Card, Rechte &amp; Pflichten;
+/// Staff: Rechte &amp; Pflichten. Die Liste lässt sich auch als PDF oder Excel erstellen.
+/// </summary>
 public sealed class MissingDocsForm : Form
 {
-    public MissingDocsForm(IReadOnlyList<Member> members)
+    public MissingDocsForm(ApiClient api, IReadOnlyList<Member> members, IReadOnlyList<Dictionary<string, string?>> staff)
     {
         Text = "Fehlende Dokumente";
         Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(900, 560);
-        MinimumSize = new Size(640, 360);
+        Size = new Size(900, 600);
+        MinimumSize = new Size(640, 400);
 
         var info = new Label
         {
             Dock = DockStyle.Top,
-            Height = 46,
+            Height = Theme.Px(52),
             Padding = new Padding(14, 12, 14, 0),
             ForeColor = Theme.Muted,
-            Text = $"{members.Count} Spieler im Kader mit fehlenden Dokumenten. Ein Dokument fehlt, wenn keine Datei hochgeladen ist " +
-                   "oder es mit „Fehlt“ markiert wurde. Bei E-Card und Reisepass genügt Vorder- oder Rückseite.",
+            Text = "Ein Dokument fehlt, wenn keine Datei hochgeladen ist oder es mit „Fehlt“ markiert wurde. " +
+                   "Bei E-Card und Reisepass genügt Vorder- oder Rückseite.",
         };
 
-        var grid = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-        };
-        Theme.StyleGrid(grid);
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Name", FillWeight = 28 });
-        foreach (var type in new[] { "nada", "pass", "ecard", "rechte" })
-        {
-            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = Member.DocumentLabel(type), FillWeight = 18 });
-        }
-
+        // Register Spieler
+        var players = RosterDownload.BuildGrid(("Name", 28), ("NADA-Zertifikat", 18), ("Reisepass", 18), ("E-Card", 18), ("Rechte & Pflichten", 18));
         foreach (var m in members)
         {
             var cells = new List<object> { m.FullName };
@@ -50,24 +40,50 @@ public sealed class MissingDocsForm : Form
                 var marked = m.MissingFlags.TryGetValue(type, out var f) && f;
                 cells.Add(missing ? (marked ? "✗ fehlt (markiert)" : "✗ fehlt") : "✓");
             }
-            var i = grid.Rows.Add(cells.ToArray());
-            for (var c = 1; c < grid.Columns.Count; c++)
-            {
-                var cell = grid.Rows[i].Cells[c];
-                var isMissing = cell.Value?.ToString()?.StartsWith('✗') == true;
-                cell.Style.ForeColor = isMissing ? Theme.Danger : Theme.Green;
-                cell.Style.BackColor = isMissing ? Color.FromArgb(0xFE, 0xE2, 0xE2) : Color.White;
-            }
+            Mark(players, players.Rows.Add(cells.ToArray()));
         }
 
-        var close = Theme.MakeButton("Schließen");
-        close.DialogResult = DialogResult.OK;
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12, 8, 12, 0) };
-        bar.Controls.Add(close);
-        CancelButton = close;
+        // Register Staff
+        var staffGrid = RosterDownload.BuildGrid(("Name", 40), ("Position", 25), ("Rechte & Pflichten", 35));
+        var staffMissing = staff
+            .Where(s => RosterDownload.StaffValue(s, "status") != "inaktiv" && RosterDownload.StaffValue(s, "dokument_rechte") != "true")
+            .OrderBy(s => RosterDownload.StaffName(s), StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        foreach (var s in staffMissing)
+        {
+            Mark(staffGrid, staffGrid.Rows.Add(RosterDownload.StaffName(s), RosterDownload.StaffValue(s, "position"), "✗ fehlt"));
+        }
 
-        Controls.Add(grid);
+        var tabs = new TabControl { Dock = DockStyle.Fill, Font = Theme.Bold };
+        tabs.TabPages.Add(TabPage($"Spieler ({members.Count})", players, members.Count == 0 ? "Bei allen Spielern im Kader sind die Dokumente vollständig." : ""));
+        tabs.TabPages.Add(TabPage($"Staff ({staffMissing.Count})", staffGrid, staffMissing.Count == 0 ? "Bei allen Staff-Personen sind die Dokumente vollständig." : ""));
+
+        Controls.Add(tabs);
         Controls.Add(info);
-        Controls.Add(bar);
+        Controls.Add(RosterDownload.BuildBar(this, api, "-fehlend", "Fehlende-Dokumente", () => new Dictionary<string, string> { ["kader"] = "kader" }));
+    }
+
+    private static TabPage TabPage(string title, DataGridView grid, string emptyHint)
+    {
+        var page = new TabPage(title) { BackColor = Theme.Background, Padding = new Padding(0, 8, 0, 0) };
+        page.Controls.Add(grid);
+        if (emptyHint.Length > 0)
+        {
+            page.Controls.Add(new Label { Dock = DockStyle.Top, Height = Theme.Px(34), ForeColor = Theme.Green, Font = Theme.Bold, Text = "✓ " + emptyHint, TextAlign = ContentAlignment.MiddleLeft });
+        }
+        return page;
+    }
+
+    private static void Mark(DataGridView grid, int rowIndex)
+    {
+        for (var c = 1; c < grid.Columns.Count; c++)
+        {
+            var cell = grid.Rows[rowIndex].Cells[c];
+            var value = cell.Value?.ToString() ?? "";
+            if (value.Length == 0) continue;
+            var isMissing = value.StartsWith('✗');
+            cell.Style.ForeColor = isMissing ? Theme.Danger : Theme.Green;
+            cell.Style.BackColor = isMissing ? Color.FromArgb(0xFE, 0xE2, 0xE2) : Color.White;
+        }
     }
 }
