@@ -36,31 +36,6 @@ public sealed class AppSettings
             : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
     }
 
-    public string TransportKeyProtected { get; set; } = "";
-
-    /// <summary>Verschlüsselungsschlüssel für die API-Übertragung (Webpanel → API-Zugang), per DPAPI geschützt gespeichert.</summary>
-    [JsonIgnore]
-    public string TransportKey
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(TransportKeyProtected)) return "";
-            try
-            {
-                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(TransportKeyProtected), null, DataProtectionScope.CurrentUser);
-                return Encoding.UTF8.GetString(bytes);
-            }
-            catch (Exception)
-            {
-                return "";
-            }
-        }
-        set => TransportKeyProtected = string.IsNullOrEmpty(value)
-            ? ""
-            : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
-    }
-
-
     // ── Lizenz ─────────────────────────────────────────────────────────────
 
     public string LicenseKeyProtected { get; set; } = "";
@@ -166,7 +141,7 @@ public sealed class AppSettings
     }
 
     [JsonIgnore]
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl) && !string.IsNullOrEmpty(Token) && TransportCryptoHandler.IsValidKey(TransportKey);
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl) && !string.IsNullOrEmpty(Token);
 
     /// <summary>Nur für Tests: anderer Speicherort statt %APPDATA%.</summary>
     public static string? PathOverride { get; set; }

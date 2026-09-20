@@ -28,11 +28,10 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Mitgliederverwaltung U19 jetzt starten" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <CustomAction Id="LaunchApp" FileRef="AppExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
-    <!-- Zugangsdaten, die bei der Installation abgefragt werden (auch per Befehlszeile: msiexec /i ... API_URL=... API_KEY=... LICENSE_KEY=... ENC_KEY=... (Verschlüsselungsschlüssel aus dem Webpanel)) -->
+    <!-- Zugangsdaten, die bei der Installation abgefragt werden (auch per Befehlszeile: msiexec /i ... API_URL=... API_KEY=... LICENSE_KEY=...; bei einem Update werden sie nicht erneut abgefragt) -->
     <Property Id="API_URL" Value="https://mitgliedverwaltung.gamingcommunity.at/api" Secure="yes" />
     <Property Id="API_KEY" Secure="yes" Hidden="yes" />
     <Property Id="LICENSE_KEY" Secure="yes" Hidden="yes" />
-    <Property Id="ENC_KEY" Secure="yes" Hidden="yes" />
 
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
@@ -40,13 +39,15 @@
       <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2" Condition="NOT Installed" />
       <!-- Ablauf: Zielordner -> Zugangsdaten -> Installieren -->
       <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ConfigDlg" Order="5"
-               Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg" Order="3" Condition="NOT Installed" />
+               Condition="(WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;) AND NOT WIX_UPGRADE_DETECTED" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="6"
+               Condition="(WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;) AND WIX_UPGRADE_DETECTED" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg" Order="3" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
 
       <Dialog Id="ConfigDlg" Width="370" Height="270" Title="Zugangsdaten - Mitgliederverwaltung U19">
         <Control Id="Title" Type="Text" X="15" Y="8" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Zugangsdaten" />
         <Control Id="Desc" Type="Text" X="15" Y="30" Width="340" Height="36" Transparent="yes" NoPrefix="yes"
-                 Text="Bitte die Adresse der Web-Anwendung, den API-Schlüssel und den Lizenzschlüssel eingeben. Beides erstellt ein Administrator im Web-Bereich unter „API-Zugang“ bzw. „Lizenzen“." />
+                 Text="Bitte die Adresse der Web-Anwendung, den API-Schlüssel und den Lizenzschlüssel eingeben. Die Schlüssel erstellt ein Administrator im Web-Bereich unter „API-Zugang“ bzw. „Lizenzen“. Die Übertragung wird automatisch verschlüsselt." />
         <Control Id="UrlLabel" Type="Text" X="15" Y="78" Width="340" Height="12" Transparent="yes" NoPrefix="yes" Text="API-Adresse" />
         <Control Id="UrlEdit" Type="Edit" X="15" Y="92" Width="340" Height="15" Property="API_URL" Text="{200}" />
         <Control Id="KeyLabel" Type="Text" X="15" Y="118" Width="340" Height="12" Transparent="yes" NoPrefix="yes" Text="API-Schlüssel" />
@@ -54,7 +55,7 @@
         <Control Id="LicLabel" Type="Text" X="15" Y="158" Width="340" Height="12" Transparent="yes" NoPrefix="yes" Text="Lizenzschlüssel (U19-XXXX-XXXX-XXXX-XXXX)" />
         <Control Id="LicEdit" Type="Edit" X="15" Y="172" Width="340" Height="15" Property="LICENSE_KEY" Text="{60}" />
         <Control Id="Hint" Type="Text" X="15" Y="198" Width="340" Height="24" Transparent="yes" NoPrefix="yes"
-                 Text="Alle drei Felder sind Pflicht. Die Angaben werden beim ersten Start der Anwendung übernommen und lassen sich später unter Einstellungen ändern." />
+                 Text="Alle Felder sind Pflicht. Bei einem Update der Anwendung werden sie nicht erneut abgefragt und lassen sich später unter Einstellungen ändern." />
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
         <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
           <Publish Event="NewDialog" Value="InstallDirDlg" />
@@ -92,7 +93,6 @@
           <RegistryValue Name="ApiUrl" Type="string" Value="[API_URL]" KeyPath="yes" />
           <RegistryValue Name="ApiKey" Type="string" Value="[API_KEY]" />
           <RegistryValue Name="LicenseKey" Type="string" Value="[LICENSE_KEY]" />
-          <RegistryValue Name="EncKey" Type="string" Value="[ENC_KEY]" />
           <RegistryValue Name="Stamp" Type="string" Value="[Date] [Time]" />
         </RegistryKey>
       </Component>

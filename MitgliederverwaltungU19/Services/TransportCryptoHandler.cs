@@ -8,8 +8,8 @@ using System.Text.Json.Nodes;
 namespace MitgliederverwaltungU19.Services;
 
 /// <summary>
-/// Verschlüsselt die gesamte API-Kommunikation zusätzlich zu HTTPS (AES-256-GCM, Schlüssel = "Verschlüsselungsschlüssel"
-/// aus dem Webpanel). Jede Anfrage wird als POST mit einem verschlüsselten Paket gesendet, das Methode, Pfad, Suchbegriffe,
+/// Verschlüsselt die gesamte API-Kommunikation zusätzlich zu HTTPS (AES-256-GCM, Schlüssel aus dem API-Schlüssel abgeleitet
+/// (kein zusätzlicher Eintrag nötig). Jede Anfrage wird als POST mit einem verschlüsselten Paket gesendet, das Methode, Pfad, Suchbegriffe,
 /// Zugangsdaten und Inhalt enthält; die Antwort kommt ebenfalls verschlüsselt zurück und wird hier wieder in eine normale
 /// HttpResponseMessage umgewandelt. Das Format ist in api/transport.php beschrieben.
 /// </summary>
@@ -19,42 +19,21 @@ public sealed class TransportCryptoHandler : DelegatingHandler
     private static readonly byte[] AadResponse = Encoding.ASCII.GetBytes("U19-RES");
 
     private readonly byte[] _key;
+    private readonly string _kid;
     private readonly Uri _endpoint;
 
-    /// <param name="keyBase64">Verschlüsselungsschlüssel (32 Byte, Base64)</param>
+    /// <param name="apiToken">API-Schlüssel; daraus wird der Übertragungsschlüssel abgeleitet (der Server kennt nur dessen SHA-256-Hash)</param>
     /// <param name="endpoint">Adresse von api/index.php</param>
-    public TransportCryptoHandler(string keyBase64, Uri endpoint, HttpMessageHandler inner) : base(inner)
+    public TransportCryptoHandler(string apiToken, Uri endpoint, HttpMessageHandler inner) : base(inner)
     {
         _endpoint = endpoint;
-        try
-        {
-            _key = Convert.FromBase64String(keyBase64.Trim());
-        }
-        catch (FormatException)
-        {
-            _key = Array.Empty<byte>();
-        }
-    }
-
-    public static bool IsValidKey(string keyBase64)
-    {
-        try
-        {
-            return Convert.FromBase64String((keyBase64 ?? "").Trim()).Length == 32;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
+        var ikm = SHA256.HashData(Encoding.UTF8.GetBytes(apiToken.Trim()));
+        _key = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, 32, salt: Array.Empty<byte>(), info: Encoding.ASCII.GetBytes("u19-transport-v2"));
+        _kid = Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes("kid").Concat(_key).ToArray())).ToLowerInvariant()[..16];
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        if (_key.Length != 32)
-        {
-            throw new ApiException("Der Verschlüsselungsschlüssel fehlt oder ist ungültig. Bitte in den Einstellungen eintragen (Webpanel → API-Zugang).");
-        }
-
         // Pfad + Query so wiederherstellen, wie der Server sie erwartet ("members/5?x=1")
         var rawQuery = request.RequestUri!.Query.TrimStart('?');
         string route = "";
@@ -134,6 +113,7 @@ public sealed class TransportCryptoHandler : DelegatingHandler
         };
         outer.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         outer.Headers.Add("X-Enc", "1");
+        outer.Headers.Add("X-Enc-Kid", _kid);
         outer.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
 
         var response = await base.SendAsync(outer, ct);
@@ -155,7 +135,7 @@ public sealed class TransportCryptoHandler : DelegatingHandler
         catch (CryptographicException)
         {
             response.Dispose();
-            throw new ApiException("Die Antwort des Servers konnte nicht entschlüsselt werden. Stimmt der Verschlüsselungsschlüssel?");
+            throw new ApiException("Die Antwort des Servers konnte nicht entschlüsselt werden. Stimmt der API-Schlüssel?");
         }
 
         var metaLen = (decrypted[0] << 24) | (decrypted[1] << 16) | (decrypted[2] << 8) | decrypted[3];

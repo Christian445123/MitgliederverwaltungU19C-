@@ -122,7 +122,7 @@ public sealed class ApiClient : IDisposable
     {
         var baseUri = new Uri(NormalizeBaseUrl(settings.BaseUrl) + "/");
         var inner = new HttpClientHandler { SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13 };
-        _http = new HttpClient(new TransportCryptoHandler(settings.TransportKey, new Uri(baseUri, "index.php"), inner))
+        _http = new HttpClient(new TransportCryptoHandler(settings.Token, new Uri(baseUri, "index.php"), inner))
         {
             BaseAddress = baseUri,
             Timeout = TimeSpan.FromSeconds(60),

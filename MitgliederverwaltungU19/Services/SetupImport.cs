@@ -29,15 +29,13 @@ public static class SetupImport
                 var url = key.GetValue("ApiUrl") as string ?? "";
                 var apiKey = key.GetValue("ApiKey") as string ?? "";
                 var license = key.GetValue("LicenseKey") as string ?? "";
-                var encKey = key.GetValue("EncKey") as string ?? "";
 
                 // Nur neue Installer-Eingaben übernehmen: gleicher Zeitstempel = schon erledigt, leere Schlüssel = schon entfernt
                 if (stamp.Length == 0 || stamp == s.SetupStamp) return false;
-                if (apiKey.Length == 0 && license.Length == 0 && encKey.Length == 0) return false;
+                if (apiKey.Length == 0 && license.Length == 0) return false;
 
                 if (!string.IsNullOrWhiteSpace(url)) s.BaseUrl = url.Trim();
                 if (apiKey.Length > 0) s.Token = apiKey.Trim();
-                if (encKey.Length > 0) s.TransportKey = encKey.Trim();
                 if (license.Length > 0)
                 {
                     s.LicenseKey = LicenseService.NormalizeKey(license);
@@ -54,7 +52,6 @@ public static class SetupImport
                     using var writable = baseKey.OpenSubKey(keyPath, writable: true);
                     writable?.DeleteValue("ApiKey", throwOnMissingValue: false);
                     writable?.DeleteValue("LicenseKey", throwOnMissingValue: false);
-                    writable?.DeleteValue("EncKey", throwOnMissingValue: false);
                 }
                 catch (Exception)
                 {
