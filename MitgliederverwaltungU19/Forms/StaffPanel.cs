@@ -92,6 +92,8 @@ public sealed class StaffPanel : UserControl
             cards.Controls.Add(card);
         }
 
+        cards.Resize += (_, _) => { var need = StatCard.PreferredHeight + cards.Padding.Vertical; if (cards.Height < need) cards.Height = need; };
+
         // Filter und Aktionen
         _statusFilter.Items.AddRange(new object[] { "Alle", "Aktiv", "Inaktiv" });
         _statusFilter.SelectedIndex = 0;

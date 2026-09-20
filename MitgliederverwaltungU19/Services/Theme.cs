@@ -127,7 +127,7 @@ public static class Theme
         g.EnableHeadersVisualStyles = false;
         g.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         g.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        g.ColumnHeadersHeight = 40;
+        g.ColumnHeadersHeight = GridHeaderHeight;
         g.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8);
         g.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(0x4B, 0x52, 0x63);
         g.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(0xF3, 0xF4, 0xF8);
@@ -143,7 +143,7 @@ public static class Theme
         g.AlternatingRowsDefaultCellStyle.BackColor = RowAlt;
         g.AlternatingRowsDefaultCellStyle.SelectionBackColor = Color.FromArgb(0xFF, 0xEC, 0xD9);
         g.AlternatingRowsDefaultCellStyle.SelectionForeColor = Ink;
-        g.RowTemplate.Height = 38;
+        g.RowTemplate.Height = GridRowHeight;
         g.RowHeadersVisible = false;
         g.AllowUserToResizeRows = false;
     }
@@ -160,10 +160,11 @@ public static class Theme
         form.Font = Body;
         form.Load += (_, _) =>
         {
-            if (Zoom > 1f && form.WindowState == FormWindowState.Normal)
+            if (Zoom > 1f)
             {
                 form.Scale(new SizeF(Zoom, Zoom));
             }
+            ApplyGridMetrics(form);
             var workArea = Screen.FromControl(form.Owner ?? form).WorkingArea;
             form.MinimumSize = new Size(Math.Min(form.MinimumSize.Width, (int)(workArea.Width * 0.96)), Math.Min(form.MinimumSize.Height, (int)(workArea.Height * 0.96)));
             FitContent(form);
@@ -229,6 +230,24 @@ public static class Theme
         if (target != form.ClientSize) form.ClientSize = target;
     }
 
+    public const int GridRowHeight = 38;
+    public const int GridHeaderHeight = 40;
+
+    /// <summary>Zeilen- und Kopfhöhe aller Tabellen im Fenster an den Zoom anpassen (die Standard-Skalierung erfasst sie nicht zuverlässig).</summary>
+    private static void ApplyGridMetrics(Control root)
+    {
+        foreach (Control c in root.Controls)
+        {
+            if (c is DataGridView g)
+            {
+                g.ColumnHeadersHeight = Px(GridHeaderHeight);
+                g.RowTemplate.Height = Px(GridRowHeight);
+                foreach (DataGridViewRow row in g.Rows) row.Height = Px(GridRowHeight);
+            }
+            if (c.Controls.Count > 0) ApplyGridMetrics(c);
+        }
+    }
+
     /// <summary>Feste Dialoge wachsen mit, wenn später Inhalt erscheint (Fortschritt, Fehlermeldung, Ergebnisliste).</summary>
     private static void KeepFitted(Form form)
     {
@@ -287,9 +306,8 @@ public static class Theme
             Text = "Link senden",
             UseColumnTextForButtonValue = true,
             FlatStyle = FlatStyle.Flat,
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-            Width = Px(120),
-            MinimumWidth = Px(120),
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+            MinimumWidth = Px(96),
             Resizable = DataGridViewTriState.False,
             SortMode = DataGridViewColumnSortMode.NotSortable,
         };

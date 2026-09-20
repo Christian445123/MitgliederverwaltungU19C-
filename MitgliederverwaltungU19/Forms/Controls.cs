@@ -95,12 +95,20 @@ internal sealed class SideNavButton : Button
     }
 }
 
-/// <summary>Kennzahl-Karte mit farbigem Streifen (Zahl groß, Beschriftung klein). Klick löst Click aus.</summary>
+/// <summary>
+/// Kennzahl-Karte mit farbigem Streifen (Zahl groß, Beschriftung klein). Klick löst Click aus.
+/// Text und Abstände werden selbst gezeichnet und aus der Schrifthöhe berechnet, damit nichts abgeschnitten wird –
+/// unabhängig von Bildschirm, Skalierung und Schriftart.
+/// </summary>
 internal sealed class StatCard : Panel
 {
-    private readonly Label _value = new() { AutoSize = false, Font = new Font(Theme.Body.FontFamily, 20f * Theme.Zoom, FontStyle.Bold), ForeColor = Color.FromArgb(0x17, 0x19, 0x23), Location = new Point(20, 10), Size = new Size(170, 38), TextAlign = ContentAlignment.MiddleLeft };
-    private readonly Label _caption = new() { AutoSize = false, ForeColor = Theme.Muted, Location = new Point(20, 50), Size = new Size(170, 24), TextAlign = ContentAlignment.MiddleLeft };
+    private static readonly Font ValueFont = new(Theme.Body.FontFamily, 20f * Theme.Zoom, FontStyle.Bold);
+    private string _value = "–";
+    private string _caption;
     private Color _accent;
+
+    /// <summary>Höhe, die eine Karte für ihren Inhalt mindestens braucht.</summary>
+    public static int PreferredHeight => Theme.Px(14) * 2 + ValueFont.Height + Theme.Px(2) + Theme.Body.Height;
 
     public StatCard(string caption, Color accent, bool clickable = false)
     {
@@ -109,27 +117,14 @@ internal sealed class StatCard : Panel
         BackColor = Color.White;
         DoubleBuffered = true;
         _accent = accent;
-        _caption.Text = caption;
-        _value.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _caption.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        Controls.Add(_value);
-        Controls.Add(_caption);
-        _value.Text = "–";
-        if (clickable)
-        {
-            Cursor = Cursors.Hand;
-            foreach (var c in new Control[] { _value, _caption })
-            {
-                c.Cursor = Cursors.Hand;
-                c.Click += (_, _) => OnClick(EventArgs.Empty);
-            }
-        }
+        _caption = caption;
+        if (clickable) Cursor = Cursors.Hand;
     }
 
     public void Set(string value, string caption, Color? accent = null)
     {
-        _value.Text = value;
-        _caption.Text = caption;
+        _value = value;
+        _caption = caption;
         if (accent is { } a) _accent = a;
         Invalidate();
     }
@@ -146,9 +141,18 @@ internal sealed class StatCard : Panel
         g.DrawPath(border, path);
 
         // farbiger Streifen links
-        var stripe = new Rectangle(0, Theme.Px(14), Theme.Px(5), Height - Theme.Px(28));
+        var stripe = new Rectangle(0, Theme.Px(14), Theme.Px(5), Math.Max(4, Height - Theme.Px(28)));
         using var stripePath = SideNavButton.RoundedRect(stripe, 2);
         using var accent = new SolidBrush(_accent);
         g.FillPath(accent, stripePath);
+
+        // Zahl und Beschriftung als Block senkrecht zentriert
+        var block = ValueFont.Height + Theme.Px(2) + Theme.Body.Height;
+        var top = Math.Max(Theme.Px(6), (Height - block) / 2);
+        var x = Theme.Px(20);
+        var width = Math.Max(10, Width - x - Theme.Px(8));
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
+        TextRenderer.DrawText(g, _value, ValueFont, new Rectangle(x, top, width, ValueFont.Height), Color.FromArgb(0x17, 0x19, 0x23), flags);
+        TextRenderer.DrawText(g, _caption, Theme.Body, new Rectangle(x, top + ValueFont.Height + Theme.Px(2), width, Theme.Body.Height), Theme.Muted, flags);
     }
 }

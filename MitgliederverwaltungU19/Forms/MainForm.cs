@@ -259,6 +259,7 @@ public sealed class MainForm : Form
             card.Dock = DockStyle.Fill;
             cards.Controls.Add(card);
         }
+        cards.Resize += (_, _) => { var need = StatCard.PreferredHeight + cards.Padding.Vertical; if (cards.Height < need) cards.Height = need; };
         _cardExpiry.Click += (_, _) => ShowExpiry();
         _cardMissing.Click += (_, _) => ShowMissing();
 
@@ -380,7 +381,7 @@ public sealed class MainForm : Form
             FillWeight = weight,
             SortMode = DataGridViewColumnSortMode.Automatic,
             ToolTipText = name == "nada" ? "NADA-Zertifikat gültig bis" : name == "pass" ? "Reisepass gültig bis" : "",
-            MinimumWidth = name is "nada" or "pass" ? 98 : name is "jersey" ? 48 : name is "bestaetigt" ? 96 : 70,
+            MinimumWidth = Theme.Px(name is "nada" or "pass" ? 98 : name is "jersey" ? 48 : name is "bestaetigt" ? 96 : 70),
         });
     }
 
