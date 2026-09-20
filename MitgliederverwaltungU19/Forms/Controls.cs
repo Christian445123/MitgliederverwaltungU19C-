@@ -157,3 +157,26 @@ internal sealed class StatCard : Panel
         TextRenderer.DrawText(g, _caption, Theme.Body, new Rectangle(x, top + ValueFont.Height + Theme.Px(2), width, Theme.Body.Height), Theme.Muted, flags);
     }
 }
+
+/// <summary>Weißes, abgerundetes Feld mit dem AFBÖ-Logo (Marke oben in der Seitenleiste).</summary>
+internal sealed class LogoPill : Control
+{
+    public LogoPill()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.Clear(Parent?.BackColor ?? Theme.Navy);
+        using var path = SideNavButton.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 12);
+        g.FillPath(Brushes.White, path);
+        if (Theme.Logo is not { } logo) return;
+        var height = Height - Theme.Px(10);
+        var width = (int)(height * (double)logo.Width / logo.Height);
+        g.DrawImage(logo, (Width - width) / 2, (Height - height) / 2, width, height);
+    }
+}

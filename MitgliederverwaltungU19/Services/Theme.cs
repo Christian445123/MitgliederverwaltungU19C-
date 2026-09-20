@@ -52,6 +52,22 @@ public static class Theme
     public static readonly Font Bold = new(FontFamily(), 10f * Zoom, FontStyle.Bold);
     public static readonly Font Title = new(FontFamily(), 15f * Zoom, FontStyle.Bold);
 
+    /// <summary>AFBÖ-Logo (als Ressource in der Anwendung), oder null.</summary>
+    public static readonly Image? Logo = LoadLogo();
+
+    private static Image? LoadLogo()
+    {
+        try
+        {
+            using var stream = typeof(Theme).Assembly.GetManifestResourceStream("logo.png");
+            return stream is null ? null : new Bitmap(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Programm-Icon (aus der .exe), damit alle Fenster in Titelleiste und Taskleiste es zeigen.</summary>
     public static readonly Icon? AppIcon = LoadAppIcon();
 

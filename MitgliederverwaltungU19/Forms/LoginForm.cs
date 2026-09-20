@@ -66,6 +66,7 @@ public sealed class LoginForm : Form
             WrapContents = false,
             Padding = new Padding(24, 22, 24, 16),
         };
+        if (Theme.Logo is not null) layout.Controls.Add(new PictureBox { Image = Theme.Logo, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(120, 52), Margin = new Padding(0, 0, 0, 10) });
         layout.Controls.Add(title);
         layout.Controls.Add(intro);
         layout.Controls.Add(new Label { Text = "Benutzername", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 18, 0, 3) });

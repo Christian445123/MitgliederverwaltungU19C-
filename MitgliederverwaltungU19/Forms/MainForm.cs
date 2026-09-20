@@ -117,24 +117,15 @@ public sealed class MainForm : Form
         // ── Seitenleiste ──────────────────────────────────────────────────
         var sidebar = new Panel { Dock = DockStyle.Left, Width = 240, BackColor = Theme.Navy };
 
-        var brand = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Theme.Navy };
-        var mark = new Label
-        {
-            Text = "U19",
-            Font = new Font(Theme.Bold.FontFamily, 12f * Theme.Zoom, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0x1A, 0x0D, 0x00),
-            BackColor = Theme.Accent,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Size = new Size(46, 46),
-            Location = new Point(20, 20),
-        };
+        var brand = new Panel { Dock = DockStyle.Top, Height = 110, BackColor = Theme.Navy };
+        var mark = new LogoPill { Size = new Size(200, 68), Location = new Point(20, 10) };
         var brandText = new Label
         {
-            Text = "AFBÖ U19\nVerwaltung",
+            Text = "U19 Verwaltung",
             Font = Theme.Bold,
-            ForeColor = Color.White,
+            ForeColor = Theme.SidebarText,
             AutoSize = true,
-            Location = new Point(76, 24),
+            Location = new Point(22, 84),
         };
         brand.Controls.AddRange(new Control[] { mark, brandText });
 
