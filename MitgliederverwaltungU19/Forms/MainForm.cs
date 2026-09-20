@@ -496,7 +496,7 @@ public sealed class MainForm : Form
 
     private void UpdateExpiryBanner()
     {
-        var items = Expiry.Find(_all);
+        var items = Expiry.Find(_all.Where(m => !StaffPositions.IsStaff(m.Get("position"))));
         var missing = MissingDocuments();
         _showMissing.Visible = missing.Count > 0;
         _showExpiry.Visible = items.Count > 0;
@@ -556,7 +556,7 @@ public sealed class MainForm : Form
 
     /// <summary>Aktive Spieler im Kader, bei denen NADA, Reisepass, E-Card oder Rechte &amp; Pflichten fehlen.</summary>
     private List<Member> MissingDocuments() => _all
-        .Where(m => m.Get("status") != "inaktiv" && m.Get("kader") != "nicht_im_kader" && m.MissingDocuments.Count > 0)
+        .Where(m => m.Get("status") != "inaktiv" && m.Get("kader") != "nicht_im_kader" && m.MissingDocuments.Count > 0 && !StaffPositions.IsStaff(m.Get("position")))
         .OrderBy(m => m.FullName, StringComparer.CurrentCultureIgnoreCase)
         .ToList();
 
@@ -577,13 +577,14 @@ public sealed class MainForm : Form
     private async void ShowExpiry()
     {
         var staff = await LoadStaffAsync();
-        using var form = new ExpiryForm(_api, Expiry.Find(_all), staff);
+        using var form = new ExpiryForm(_api, Expiry.Find(_all.Where(m => !StaffPositions.IsStaff(m.Get("position")))), staff);
         form.ShowDialog(this);
     }
 
-    private void ShowMissing()
+    private async void ShowMissing()
     {
-        using var form = new MissingDocsForm(_api, MissingDocuments());
+        var staff = await LoadStaffAsync();
+        using var form = new MissingDocsForm(_api, MissingDocuments(), staff);
         form.ShowDialog(this);
     }
 

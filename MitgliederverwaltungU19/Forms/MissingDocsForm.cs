@@ -4,12 +4,12 @@ using MitgliederverwaltungU19.Services;
 namespace MitgliederverwaltungU19.Forms;
 
 /// <summary>
-/// Fehlende Dokumente der Spieler: NADA-Zertifikat, Reisepass, E-Card, Rechte &amp; Pflichten;
-/// beim Staff sind Dokumente freiwillig. Die Liste lässt sich auch als PDF oder Excel erstellen.
+/// Fehlende Dokumente, Spieler und Staff getrennt. Spieler (ohne Personen mit Staff-Position): NADA-Zertifikat, Reisepass, E-Card, Rechte &amp; Pflichten;
+/// Staff: Rechte &amp; Pflichten und Foto des Reisepasses sind freiwillig (nur Hinweis). Die Liste lässt sich auch als PDF oder Excel erstellen.
 /// </summary>
 public sealed class MissingDocsForm : Form
 {
-    public MissingDocsForm(ApiClient api, IReadOnlyList<Member> members)
+    public MissingDocsForm(ApiClient api, IReadOnlyList<Member> members, IReadOnlyList<Dictionary<string, string?>> staff)
     {
         Text = "Fehlende Dokumente";
         Theme.Prepare(this);
@@ -43,20 +43,31 @@ public sealed class MissingDocsForm : Form
             Mark(players, players.Rows.Add(cells.ToArray()));
         }
 
-        // Staff: Rechte & Pflichten und Foto des Reisepasses sind freiwillig, es gibt dort keine fehlenden Pflichtdokumente
+        // Register Staff: nur Personen aus dem Staff. Rechte & Pflichten und Foto des Reisepasses sind freiwillig,
+        // deshalb steht dort „nicht hochgeladen“ (Hinweis) und nicht „fehlt“.
+        var staffGrid = RosterDownload.BuildGrid(("Name", 34), ("Position", 16), ("Rechte & Pflichten (freiwillig)", 25), ("Foto Reisepass (freiwillig)", 25));
+        var staffOpen = staff
+            .Where(s => RosterDownload.StaffValue(s, "status") != "inaktiv"
+                        && (RosterDownload.StaffValue(s, "dokument_rechte") != "true"
+                            || (RosterDownload.StaffValue(s, "dokument_pass") != "true" && RosterDownload.StaffValue(s, "dokument_pass_back") != "true")))
+            .OrderBy(s => RosterDownload.StaffName(s), StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        foreach (var s in staffOpen)
+        {
+            var noRechte = RosterDownload.StaffValue(s, "dokument_rechte") != "true";
+            var noPass = RosterDownload.StaffValue(s, "dokument_pass") != "true" && RosterDownload.StaffValue(s, "dokument_pass_back") != "true";
+            var i = staffGrid.Rows.Add(RosterDownload.StaffName(s), RosterDownload.StaffValue(s, "position"), noRechte ? "nicht hochgeladen" : "✓", noPass ? "nicht hochgeladen" : "✓");
+            for (var c = 2; c <= 3; c++)
+            {
+                var cell = staffGrid.Rows[i].Cells[c];
+                var open = cell.Value?.ToString() != "✓";
+                cell.Style.ForeColor = open ? Theme.AccentDark : Theme.Green;
+            }
+        }
+
         var tabs = new TabControl { Dock = DockStyle.Fill, Font = Theme.Bold };
         tabs.TabPages.Add(TabPage($"Spieler ({members.Count})", players, members.Count == 0 ? "Bei allen Spielern im Kader sind die Dokumente vollständig." : ""));
-        var staffPage = new TabPage("Staff") { BackColor = Theme.Background, Padding = new Padding(16) };
-        staffPage.Controls.Add(new Label
-        {
-            Dock = DockStyle.Top,
-            AutoSize = false,
-            Height = Theme.Px(60),
-            ForeColor = Theme.Muted,
-            Font = Theme.Body,
-            Text = "Beim Staff sind Rechte & Pflichten und das Foto des Reisepasses freiwillig. Wer sie hat, kann sie beim Bearbeiten der Person hochladen – es gibt hier keine fehlenden Pflichtdokumente.",
-        });
-        tabs.TabPages.Add(staffPage);
+        tabs.TabPages.Add(TabPage($"Staff ({staffOpen.Count})", staffGrid, staffOpen.Count == 0 ? "Beim Staff ist alles hochgeladen (die Dokumente sind freiwillig)." : ""));
 
         Controls.Add(tabs);
         Controls.Add(info);
