@@ -124,4 +124,9 @@ public sealed class RosterForm : Form
             _pdf.Enabled = _excel.Enabled = true;
         }
     }
+
+    private void InitializeComponent()
+    {
+
+    }
 }
