@@ -22,7 +22,7 @@ public sealed class LoginForm : Form
         _settings = settings;
         _api = api;
         Text = "Anmelden";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterScreen;
@@ -36,7 +36,7 @@ public sealed class LoginForm : Form
         AcceptButton = _login;
         CancelButton = quit;
 
-        var title = new Label { Text = "Mitgliederverwaltung U19", Font = new Font(Theme.Title.FontFamily, 16f, FontStyle.Bold), AutoSize = true };
+        var title = new Label { Text = "Mitgliederverwaltung U19", Font = new Font(Theme.Title.FontFamily, 16f * Theme.Zoom, FontStyle.Bold), AutoSize = true };
         var intro = new Label
         {
             AutoSize = true,
@@ -105,6 +105,31 @@ public sealed class LoginForm : Form
             User = result.User;
             DialogResult = DialogResult.OK;
         }
+        catch (ApiException ex) when (ex.Code == "must_change_password")
+        {
+            using var dialog = new NewPasswordDialog();
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                try
+                {
+                    await _api.FirstPasswordAsync(username, _password.Text, dialog.NewPassword);
+                    _password.Text = dialog.NewPassword;
+                    _login.Enabled = true;
+                    await LoginAsync();
+                    return;
+                }
+                catch (ApiException ex2)
+                {
+                    _status.ForeColor = Theme.Danger;
+                    _status.Text = ex2.Message;
+                }
+            }
+            else
+            {
+                _status.ForeColor = Theme.Danger;
+                _status.Text = "Ohne neues Passwort ist keine Anmeldung möglich.";
+            }
+        }
         catch (ApiException ex)
         {
             _status.ForeColor = Theme.Danger;
@@ -116,5 +141,51 @@ public sealed class LoginForm : Form
         {
             _login.Enabled = true;
         }
+    }
+}
+
+/// <summary>Neues Passwort festlegen (Pflicht bei der ersten Anmeldung eines im Web-Panel angelegten Benutzers).</summary>
+internal sealed class NewPasswordDialog : Form
+{
+    private readonly TextBox _new = new() { Width = 340, UseSystemPasswordChar = true };
+    private readonly TextBox _repeat = new() { Width = 340, UseSystemPasswordChar = true };
+    private readonly Label _error = new() { AutoSize = true, ForeColor = Theme.Danger, MaximumSize = new Size(340, 0) };
+
+    public string NewPassword => _new.Text;
+
+    public NewPasswordDialog()
+    {
+        Theme.Prepare(this);
+        Text = "Neues Passwort festlegen";
+        Icon = Theme.AppIcon;
+        BackColor = Color.White;
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = MinimizeBox = false;
+        ClientSize = new Size(390, 330);
+
+        var ok = Theme.MakeButton("Passwort speichern", primary: true);
+        var cancel = Theme.MakeButton("Abbrechen");
+        ok.Click += (_, _) =>
+        {
+            if (_new.Text.Length < 8) { _error.Text = "Das Passwort muss mindestens 8 Zeichen haben."; return; }
+            if (_new.Text != _repeat.Text) { _error.Text = "Die Passwörter stimmen nicht überein."; return; }
+            DialogResult = DialogResult.OK;
+        };
+        cancel.Click += (_, _) => DialogResult = DialogResult.Cancel;
+        AcceptButton = ok;
+        CancelButton = cancel;
+
+        var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 14, 0, 0), WrapContents = false };
+        buttons.Controls.AddRange(new Control[] { ok, cancel });
+        var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(24, 20, 24, 12) };
+        layout.Controls.Add(new Label { Text = "Vor der ersten Anmeldung muss ein eigenes Passwort festgelegt werden (mindestens 8 Zeichen).", AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Theme.Muted });
+        layout.Controls.Add(new Label { Text = "Neues Passwort", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 14, 0, 3) });
+        layout.Controls.Add(_new);
+        layout.Controls.Add(new Label { Text = "Passwort wiederholen", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 10, 0, 3) });
+        layout.Controls.Add(_repeat);
+        layout.Controls.Add(buttons);
+        layout.Controls.Add(_error);
+        Controls.Add(layout);
     }
 }

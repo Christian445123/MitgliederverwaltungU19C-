@@ -25,7 +25,7 @@ public sealed class UpdateForm : Form
     {
         _settings = settings;
         Text = "Programm-Updates";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

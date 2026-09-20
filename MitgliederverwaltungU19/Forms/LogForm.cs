@@ -29,7 +29,7 @@ public sealed class LogForm : Form
         _api = api;
         _canPurge = canPurge;
         Text = "Protokoll";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;
@@ -174,7 +174,7 @@ public sealed class LogForm : Form
             StartPosition = FormStartPosition.CenterParent,
             Size = new Size(720, 520),
         };
-        form.Controls.Add(new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = text, Font = new Font("Consolas", 10f), BackColor = Color.White });
+        form.Controls.Add(new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = text, Font = new Font("Consolas", 10f * Theme.Zoom), BackColor = Color.White });
         form.ShowDialog(this);
     }
 

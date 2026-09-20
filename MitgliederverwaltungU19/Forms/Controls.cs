@@ -43,7 +43,7 @@ internal sealed class SideNavButton : Button
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         g.Clear(Parent?.BackColor ?? Theme.Navy);
 
-        var rect = new Rectangle(10, 2, Width - 20, Height - 4);
+        var rect = new Rectangle(Theme.Px(10), Theme.Px(2), Width - Theme.Px(20), Height - Theme.Px(4));
         var back = Active ? Theme.Accent : _hover && Enabled ? HoverBack : Color.Empty;
         if (back != Color.Empty)
         {
@@ -57,23 +57,23 @@ internal sealed class SideNavButton : Button
             : _hover ? Color.White : Idle;
         using var textBrush = new SolidBrush(fore);
 
-        using (var iconFont = new Font("Segoe MDL2 Assets", 12f))
+        using (var iconFont = new Font("Segoe MDL2 Assets", 12f * Theme.Zoom))
         {
-            var iconRect = new RectangleF(rect.X + 12, rect.Y, 26, rect.Height);
+            var iconRect = new RectangleF(rect.X + Theme.Px(12), rect.Y, Theme.Px(26), rect.Height);
             var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             g.DrawString(Glyph, iconFont, textBrush, iconRect, fmt);
         }
 
         var textFont = Active ? Theme.Bold : Theme.Body;
         var textFmt = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(Text, textFont, textBrush, new RectangleF(rect.X + 46, rect.Y, rect.Width - 46 - (Badge > 0 ? 36 : 6), rect.Height), textFmt);
+        g.DrawString(Text, textFont, textBrush, new RectangleF(rect.X + Theme.Px(46), rect.Y, rect.Width - Theme.Px(46) - Theme.Px(Badge > 0 ? 36 : 6), rect.Height), textFmt);
 
         if (Badge > 0)
         {
             var label = Badge > 99 ? "99+" : Badge.ToString();
             var size = g.MeasureString(label, Theme.Bold);
-            var w = Math.Max(24, (int)size.Width + 10);
-            var pill = new Rectangle(rect.Right - w - 8, rect.Y + (rect.Height - 20) / 2, w, 20);
+            var w = Math.Max(Theme.Px(24), (int)size.Width + Theme.Px(10));
+            var pill = new Rectangle(rect.Right - w - Theme.Px(8), rect.Y + (rect.Height - Theme.Px(20)) / 2, w, Theme.Px(20));
             using var pillPath = RoundedRect(pill, 10);
             using var pillBrush = new SolidBrush(Theme.Danger);
             g.FillPath(pillBrush, pillPath);
@@ -98,7 +98,7 @@ internal sealed class SideNavButton : Button
 /// <summary>Kennzahl-Karte mit farbigem Streifen (Zahl groß, Beschriftung klein). Klick löst Click aus.</summary>
 internal sealed class StatCard : Panel
 {
-    private readonly Label _value = new() { AutoSize = false, Font = new Font(Theme.Body.FontFamily, 20f, FontStyle.Bold), ForeColor = Color.FromArgb(0x17, 0x19, 0x23), Location = new Point(20, 10), Size = new Size(170, 38), TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _value = new() { AutoSize = false, Font = new Font(Theme.Body.FontFamily, 20f * Theme.Zoom, FontStyle.Bold), ForeColor = Color.FromArgb(0x17, 0x19, 0x23), Location = new Point(20, 10), Size = new Size(170, 38), TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label _caption = new() { AutoSize = false, ForeColor = Theme.Muted, Location = new Point(20, 50), Size = new Size(170, 24), TextAlign = ContentAlignment.MiddleLeft };
     private Color _accent;
 
@@ -146,7 +146,7 @@ internal sealed class StatCard : Panel
         g.DrawPath(border, path);
 
         // farbiger Streifen links
-        var stripe = new Rectangle(0, 14, 5, Height - 28);
+        var stripe = new Rectangle(0, Theme.Px(14), Theme.Px(5), Height - Theme.Px(28));
         using var stripePath = SideNavButton.RoundedRect(stripe, 2);
         using var accent = new SolidBrush(_accent);
         g.FillPath(accent, stripePath);

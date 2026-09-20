@@ -32,6 +32,11 @@ public sealed class MainForm : Form
     private readonly StatCard _cardConfirmed = new("Daten bestätigt", Color.FromArgb(0x10, 0xB9, 0x81));
     private readonly StatCard _cardExpiry = new("Ablauf NADA / Pass", Color.FromArgb(0xEA, 0xB3, 0x08), clickable: true);
     private readonly StatCard _cardMissing = new("Fehlende Dokumente", Theme.Danger, clickable: true);
+    private SideNavButton? _navMembers;
+    private SideNavButton? _navStaff;
+    private Panel? _playersPage;
+    private StaffPanel? _staffPanel;
+    private bool _staffLoaded;
     private SideNavButton? _navExpiry;
     private SideNavButton? _navMissing;
     private bool _licenseBusy;
@@ -43,7 +48,7 @@ public sealed class MainForm : Form
         _ping = ping;
 
         Text = "Mitgliederverwaltung U19";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterScreen;
@@ -111,7 +116,7 @@ public sealed class MainForm : Form
         var mark = new Label
         {
             Text = "U19",
-            Font = new Font(Theme.Bold.FontFamily, 12f, FontStyle.Bold),
+            Font = new Font(Theme.Bold.FontFamily, 12f * Theme.Zoom, FontStyle.Bold),
             ForeColor = Color.FromArgb(0x1A, 0x0D, 0x00),
             BackColor = Theme.Accent,
             TextAlign = ContentAlignment.MiddleCenter,
@@ -145,8 +150,9 @@ public sealed class MainForm : Form
             return b;
         }
 
-        Nav("Mitglieder", "", () => _grid.Focus(), active: true);
-        Nav("Staff", "", () => { using var form = new StaffForm(_api, _ping.CanWrite && _ping.Can("staff.edit")); form.ShowDialog(this); }).Visible = _ping.Can("staff.view");
+        _navMembers = Nav("Mitglieder", "", () => ShowPage(false), active: true);
+        _navStaff = Nav("Staff", "", () => ShowPage(true));
+        _navStaff.Visible = _ping.Can("staff.view");
         var import = Nav("Import …", "", async () => await OpenImportAsync());
         import.Visible = _ping.CanWrite && _ping.Can("members.import");
         Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); }).Visible = _ping.Can("members.export");
@@ -225,7 +231,7 @@ public sealed class MainForm : Form
         var title = new Label
         {
             Text = "Mitglieder",
-            Font = new Font(Theme.Title.FontFamily, 20f, FontStyle.Bold),
+            Font = new Font(Theme.Title.FontFamily, 20f * Theme.Zoom, FontStyle.Bold),
             ForeColor = Color.FromArgb(0x17, 0x19, 0x23),
             AutoSize = true,
             Location = new Point(0, 4),
@@ -286,6 +292,15 @@ public sealed class MainForm : Form
         AddColumn("bestaetigt", "Bestätigt", 9);
         AddColumn("nada", "NADA", 9);
         AddColumn("pass", "Pass", 9);
+        _grid.Columns.Add(Theme.LinkColumn());
+        _grid.CellContentClick += (_, e) =>
+        {
+            if (e.RowIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "link" || _grid.Rows[e.RowIndex].Tag is not Member m) return;
+            if (!(_ping.CanWrite && _ping.Can("members.links"))) return;
+            using var form = new MemberLinkForm(_api, m);
+            form.ShowDialog(this);
+            _ = ReloadAsync();
+        };
         _grid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex >= 0 && SelectedMember() is { } m) await OpenEditorAsync(m);
@@ -309,8 +324,36 @@ public sealed class MainForm : Form
         content.Controls.Add(cards);
         content.Controls.Add(titleRow);
 
+        _playersPage = content;
+        if (_ping.Can("staff.view"))
+        {
+            _staffPanel = new StaffPanel(_api, _ping) { Visible = false };
+            Controls.Add(_staffPanel);
+        }
         Controls.Add(content);
         Controls.Add(sidebar);
+    }
+
+    /// <summary>Wechselt im Hauptfenster zwischen Spielerliste und Staff (kein eigenes Fenster).</summary>
+    private void ShowPage(bool staff)
+    {
+        if (_playersPage is null) return;
+        if (staff && _staffPanel is null) return;
+        _playersPage.Visible = !staff;
+        if (_staffPanel is not null) _staffPanel.Visible = staff;
+        if (_navMembers is not null) _navMembers.Active = !staff;
+        if (_navStaff is not null) _navStaff.Active = staff;
+        _navMembers?.Invalidate();
+        _navStaff?.Invalidate();
+        if (staff && !_staffLoaded)
+        {
+            _staffLoaded = true;
+            _ = _staffPanel!.ReloadAsync();
+        }
+        else if (!staff)
+        {
+            _grid.Focus();
+        }
     }
 
     private void AddColumn(string name, string title, float weight)

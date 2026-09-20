@@ -25,7 +25,7 @@ public sealed class MemberForm : Form
         }
 
         Text = member is null ? "Neues Mitglied" : "Mitglied bearbeiten – " + member.FullName;
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

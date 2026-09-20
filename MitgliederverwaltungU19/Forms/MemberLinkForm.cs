@@ -10,7 +10,7 @@ public sealed class MemberLinkForm : Form
     private readonly int _memberId;
     private readonly string _entity;
     private readonly TextBox _link = new() { Dock = DockStyle.Top, ReadOnly = true, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8) };
-    private readonly TextBox _code = new() { Dock = DockStyle.Top, ReadOnly = true, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8), Font = new Font("Consolas", 12f, FontStyle.Bold) };
+    private readonly TextBox _code = new() { Dock = DockStyle.Top, ReadOnly = true, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8), Font = new Font("Consolas", 12f * Theme.Zoom, FontStyle.Bold) };
     private readonly Label _who = new() { AutoSize = true, MaximumSize = new Size(560, 0), Font = Theme.Bold };
     private readonly Label _verified = new() { AutoSize = true, MaximumSize = new Size(560, 0), ForeColor = Theme.Muted, Margin = new Padding(0, 6, 0, 0) };
     private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(0, 10, 0, 0) };
@@ -26,7 +26,7 @@ public sealed class MemberLinkForm : Form
         _memberId = id;
         _entity = entity;
         Text = "Zugangslink – " + fullName;
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

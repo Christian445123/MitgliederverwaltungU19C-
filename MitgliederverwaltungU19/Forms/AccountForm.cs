@@ -16,7 +16,7 @@ public sealed class AccountForm : Form
     {
         _api = api;
         Text = "Konto";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
@@ -34,7 +34,7 @@ public sealed class AccountForm : Form
         buttons.Controls.AddRange(new Control[] { _save, close });
 
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, AutoScroll = true };
-        layout.Controls.Add(new Label { Text = "Konto", Font = new Font(Theme.Title.FontFamily, 16f, FontStyle.Bold), AutoSize = true });
+        layout.Controls.Add(new Label { Text = "Konto", Font = new Font(Theme.Title.FontFamily, 16f * Theme.Zoom, FontStyle.Bold), AutoSize = true });
         layout.Controls.Add(new Label
         {
             AutoSize = true,

@@ -38,7 +38,7 @@ public sealed class ImportForm : Form
     {
         _api = api;
         Text = "Import aus CSV / Excel";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

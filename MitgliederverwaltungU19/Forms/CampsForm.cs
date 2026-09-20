@@ -17,7 +17,7 @@ public sealed class CampsForm : Form
         _api = api;
         _canDelete = canDelete;
         Text = "Camps";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;
@@ -146,7 +146,7 @@ internal sealed class PromptDialog : Form
     public PromptDialog(string title, string label, string initial)
     {
         Text = title;
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

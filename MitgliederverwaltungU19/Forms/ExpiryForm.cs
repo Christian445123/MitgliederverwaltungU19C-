@@ -8,7 +8,7 @@ public sealed class ExpiryForm : Form
     public ExpiryForm(IReadOnlyList<ExpiryItem> items)
     {
         Text = "Ablaufende Dokumente";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

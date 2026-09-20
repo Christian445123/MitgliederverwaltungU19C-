@@ -176,6 +176,14 @@ public sealed class ApiClient : IDisposable
             UserInfo.FromJson(root.GetProperty("user")));
     }
 
+    /// <summary>Legt das erste eigene Passwort fest (für im Web-Panel neu angelegte Benutzer, die es ändern müssen).</summary>
+    public async Task FirstPasswordAsync(string username, string password, string newPassword, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["username"] = username, ["password"] = password, ["new_password"] = newPassword };
+        using var _ = await SendJsonAsync(HttpMethod.Post, "auth/first-password", body, ct);
+    }
+
+
     /// <summary>Beendet die Sitzung auf dem Server (Fehler werden ignoriert).</summary>
     public async Task LogoutAsync(CancellationToken ct = default)
     {

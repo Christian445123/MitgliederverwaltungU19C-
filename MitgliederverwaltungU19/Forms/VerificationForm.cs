@@ -40,7 +40,7 @@ public sealed class VerificationForm : Form
         _selected = selected;
         var noun = entity == "staff" ? "Staff-Personen" : "Spieler";
         Text = "Daten bestätigen lassen – " + noun;
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

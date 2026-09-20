@@ -21,7 +21,7 @@ public sealed class UserAdminForm : Form
     {
         _api = api;
         Text = "Benutzer & Rechte";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;
@@ -248,7 +248,7 @@ internal sealed class UserEditDialog : Form
         _detail = detail;
         _permissions = permissions;
         Text = detail is null ? "Neuer Benutzer" : "Benutzer bearbeiten – " + detail.Username;
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
@@ -405,7 +405,7 @@ internal sealed class RoleEditDialog : Form
         _role = role;
         var locked = role?.IsAdministrator == true;
         Text = role is null ? "Neue Rolle" : "Rolle bearbeiten – " + role.Name;
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

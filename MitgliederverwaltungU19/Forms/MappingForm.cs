@@ -18,7 +18,7 @@ public sealed class MappingForm : Form
         _response = response;
 
         Text = "Spaltenzuordnung";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;

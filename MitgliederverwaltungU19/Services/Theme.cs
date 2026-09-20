@@ -18,9 +18,39 @@ public static class Theme
     public static readonly Color DangerLight = Color.FromArgb(0xF8, 0x71, 0x71);
     public static readonly Color SidebarText = Color.FromArgb(0xC7, 0xCB, 0xE0);
 
-    public static readonly Font Body = new(FontFamily(), 10f);
-    public static readonly Font Bold = new(FontFamily(), 10f, FontStyle.Bold);
-    public static readonly Font Title = new(FontFamily(), 15f, FontStyle.Bold);
+    /// <summary>
+    /// Anpassung an den Bildschirm: Auf großen Bildschirmen mit kleiner Windows-Skalierung (z. B. 4K bei 100 %)
+    /// werden Schrift und Fenster vergrößert (1,0 bis 2,0). Bei normaler Skalierung bleibt es 1,0.
+    /// </summary>
+    public static readonly float Zoom = ComputeZoom();
+
+    /// <summary>Pixelwert an den Zoom anpassen (für selbst gezeichnete Elemente).</summary>
+    public static int Px(int value) => (int)Math.Round(value * Zoom);
+
+    private static float ComputeZoom()
+    {
+        try
+        {
+            // Manuell einstellbar (z. B. U19_ZOOM=1.5), sonst automatisch nach Bildschirmgröße
+            if (float.TryParse(Environment.GetEnvironmentVariable("U19_ZOOM"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var manual) && manual is >= 0.75f and <= 3f)
+            {
+                return manual;
+            }
+            var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1080);
+            using var g = Graphics.FromHwnd(IntPtr.Zero);
+            var dpiScale = Math.Max(1f, g.DpiY / 96f);
+            var zoom = area.Height / 1040f / dpiScale;
+            return zoom < 1.2f ? 1f : Math.Min(2f, (float)Math.Round(zoom * 4) / 4f);
+        }
+        catch
+        {
+            return 1f;
+        }
+    }
+
+    public static readonly Font Body = new(FontFamily(), 10f * Zoom);
+    public static readonly Font Bold = new(FontFamily(), 10f * Zoom, FontStyle.Bold);
+    public static readonly Font Title = new(FontFamily(), 15f * Zoom, FontStyle.Bold);
 
     /// <summary>Programm-Icon (aus der .exe), damit alle Fenster in Titelleiste und Taskleiste es zeigen.</summary>
     public static readonly Icon? AppIcon = LoadAppIcon();
@@ -116,6 +146,74 @@ public static class Theme
         g.RowTemplate.Height = 38;
         g.RowHeadersVisible = false;
         g.AllowUserToResizeRows = false;
+    }
+
+
+    /// <summary>
+    /// Einheitliche Vorbereitung jedes Fensters: Schrift, DPI-Skalierung und Anpassung an die Bildschirmgröße
+    /// (vergrößert bei Bedarf und begrenzt das Fenster auf den sichtbaren Bereich).
+    /// </summary>
+    public static void Prepare(Form form)
+    {
+        form.AutoScaleDimensions = new SizeF(96f, 96f);
+        form.AutoScaleMode = AutoScaleMode.Dpi;
+        form.Font = Body;
+        form.Load += (_, _) =>
+        {
+            if (Zoom > 1f && form.WindowState == FormWindowState.Normal)
+            {
+                form.Scale(new SizeF(Zoom, Zoom));
+            }
+            FitToScreen(form);
+        };
+    }
+
+    private static void FitToScreen(Form form)
+    {
+        if (form.WindowState != FormWindowState.Normal) return;
+        var area = Screen.FromControl(form.Owner ?? form).WorkingArea;
+        var w = Math.Min(form.Width, (int)(area.Width * 0.96));
+        var h = Math.Min(form.Height, (int)(area.Height * 0.96));
+        if (w != form.Width || h != form.Height) form.Size = new Size(w, h);
+        if (form.StartPosition is FormStartPosition.CenterScreen or FormStartPosition.CenterParent)
+        {
+            var bounds = form.Owner is { WindowState: FormWindowState.Normal } owner ? owner.Bounds : area;
+            var x = bounds.Left + (bounds.Width - form.Width) / 2;
+            var y = bounds.Top + (bounds.Height - form.Height) / 2;
+            form.Location = new Point(Math.Max(area.Left, Math.Min(x, area.Right - form.Width)), Math.Max(area.Top, Math.Min(y, area.Bottom - form.Height)));
+        }
+        else
+        {
+            var x = Math.Max(area.Left, Math.Min(form.Left, area.Right - form.Width));
+            var y = Math.Max(area.Top, Math.Min(form.Top, area.Bottom - form.Height));
+            form.Location = new Point(x, y);
+        }
+    }
+
+
+    /// <summary>Tabellenspalte ganz hinten: pro Zeile ein Button „Link senden“ (öffnet den persönlichen Link mit E-Mail-Versand).</summary>
+    public static DataGridViewButtonColumn LinkColumn()
+    {
+        var col = new DataGridViewButtonColumn
+        {
+            Name = "link",
+            HeaderText = "",
+            Text = "Link senden",
+            UseColumnTextForButtonValue = true,
+            FlatStyle = FlatStyle.Flat,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Width = Px(120),
+            MinimumWidth = Px(120),
+            Resizable = DataGridViewTriState.False,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+        };
+        col.DefaultCellStyle.BackColor = AccentSoft;
+        col.DefaultCellStyle.ForeColor = AccentDark;
+        col.DefaultCellStyle.SelectionBackColor = AccentSoft;
+        col.DefaultCellStyle.SelectionForeColor = AccentDark;
+        col.DefaultCellStyle.Font = Bold;
+        col.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        return col;
     }
 
     public static void ShowError(IWin32Window owner, Exception ex) =>

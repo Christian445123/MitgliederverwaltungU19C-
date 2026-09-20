@@ -19,7 +19,7 @@ public sealed class LicenseForm : Form
         _settings = settings;
         _api = api;
         Text = "Lizenz";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterScreen;

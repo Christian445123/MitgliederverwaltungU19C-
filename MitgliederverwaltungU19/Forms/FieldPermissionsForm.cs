@@ -21,7 +21,7 @@ public sealed class FieldPermissionsForm : Form
     {
         _api = api;
         Text = "Feld-Rechte";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;

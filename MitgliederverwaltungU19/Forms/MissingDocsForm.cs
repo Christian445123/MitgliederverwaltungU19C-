@@ -9,7 +9,7 @@ public sealed class MissingDocsForm : Form
     public MissingDocsForm(IReadOnlyList<Member> members)
     {
         Text = "Fehlende Dokumente";
-        Font = Theme.Body;
+        Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterParent;
