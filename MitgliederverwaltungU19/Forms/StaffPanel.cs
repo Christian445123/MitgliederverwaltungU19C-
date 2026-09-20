@@ -307,14 +307,11 @@ public sealed class StaffPanel : UserControl
         {
             int? id = row is not null && IdOf(row) > 0 ? IdOf(row) : null;
             var savedId = await _api.SaveStaffAsync(id, dialog.Payload);
-            if (dialog.RemoveRechte && id is not null)
+            if (id is not null)
             {
-                await _api.DeleteDocumentAsync(savedId, "rechte", kind: "staff");
+                foreach (var type in dialog.DocRemove) await _api.DeleteDocumentAsync(savedId, type, kind: "staff");
             }
-            if (dialog.RechteFile is { } file)
-            {
-                await _api.UploadDocumentAsync(savedId, "rechte", file, kind: "staff");
-            }
+            foreach (var (type, file) in dialog.DocFiles) await _api.UploadDocumentAsync(savedId, type, file, kind: "staff");
             await ReloadAsync();
         }
         catch (Exception ex)

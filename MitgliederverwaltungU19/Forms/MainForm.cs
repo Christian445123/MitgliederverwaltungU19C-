@@ -598,10 +598,9 @@ public sealed class MainForm : Form
         form.ShowDialog(this);
     }
 
-    private async void ShowMissing()
+    private void ShowMissing()
     {
-        var staff = await LoadStaffAsync();
-        using var form = new MissingDocsForm(_api, MissingDocuments(), staff);
+        using var form = new MissingDocsForm(_api, MissingDocuments());
         form.ShowDialog(this);
     }
 

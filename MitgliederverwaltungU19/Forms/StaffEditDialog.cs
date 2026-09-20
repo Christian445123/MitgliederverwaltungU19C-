@@ -10,22 +10,26 @@ internal sealed class StaffEditDialog : Form
     private readonly int? _id;
     private readonly Dictionary<string, Control> _inputs = new();
     private readonly ComboBox _status = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-    private readonly Label _rechteStatus = new() { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
-    private readonly bool _rechteVorhanden;
 
     public JsonObject Payload { get; private set; } = new();
 
-    /// <summary>Neu gewählte Datei für "Rechte und Pflichten" (wird nach dem Speichern hochgeladen).</summary>
-    public string? RechteFile { get; private set; }
+    /// <summary>Freiwillige Dokumente: Schlüssel (API) und Beschriftung.</summary>
+    private static readonly (string Type, string Caption)[] DocumentTypes =
+    {
+        ("rechte", "Rechte & Pflichten (unterschrieben, freiwillig)"),
+        ("pass", "Foto Reisepass Vorderseite (freiwillig)"),
+        ("pass_back", "Foto Reisepass Rückseite (freiwillig)"),
+    };
 
-    /// <summary>Vorhandenes Dokument beim Speichern entfernen.</summary>
-    public bool RemoveRechte { get; private set; }
+    /// <summary>Neu gewählte Dateien je Dokumenttyp (werden nach dem Speichern hochgeladen).</summary>
+    public Dictionary<string, string> DocFiles { get; } = new();
 
+    /// <summary>Dokumenttypen, deren vorhandene Datei beim Speichern entfernt wird.</summary>
+    public HashSet<string> DocRemove { get; } = new();
     public StaffEditDialog(ApiClient api, Dictionary<string, string?>? row)
     {
         _api = api;
         _id = row is not null && int.TryParse(row.TryGetValue("id", out var idText) ? idText : null, out var idValue) ? idValue : null;
-        _rechteVorhanden = row is not null && row.TryGetValue("dokument_rechte", out var dr) && dr == "true";
 
         Text = row is null ? "Neue Person im Staff" : "Staff bearbeiten";
         Theme.Prepare(this);
@@ -70,65 +74,73 @@ internal sealed class StaffEditDialog : Form
         table.Controls.Add(new Label { Text = "Status", AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
         table.Controls.Add(_status);
 
-        // Rechte und Pflichten (unterschriebenes Dokument)
-        var open = Theme.MakeButton("Öffnen");
-        var upload = Theme.MakeButton("Hochladen …");
-        var remove = Theme.MakeButton("Entfernen");
-        var docBox = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Width = 360, Margin = new Padding(0, 6, 0, 0) };
-        docBox.Controls.Add(_rechteStatus);
-        docBox.SetFlowBreak(_rechteStatus, true);
-        docBox.Controls.AddRange(new Control[] { open, upload, remove });
-        table.Controls.Add(new Label { Text = "Rechte & Pflichten (unterschrieben)", AutoSize = true, MaximumSize = new Size(190, 0), Margin = new Padding(0, 14, 8, 0) });
-        table.Controls.Add(docBox);
-
-        void RefreshDoc()
+        // Freiwillige Dokumente: Rechte & Pflichten (unterschrieben) sowie Foto des Reisepasses (Vorder-/Rückseite)
+        foreach (var (type, caption) in DocumentTypes)
         {
-            var present = _rechteVorhanden && !RemoveRechte;
-            _rechteStatus.Text = RechteFile is not null ? "Neue Datei: " + Path.GetFileName(RechteFile) + " (wird beim Speichern hochgeladen)"
-                : RemoveRechte ? "wird beim Speichern entfernt"
-                : present ? "✓ vorhanden" : "fehlt";
-            _rechteStatus.ForeColor = present || RechteFile is not null ? Theme.Green : Theme.Muted;
-            open.Enabled = present && _id is not null && RechteFile is null;
-            remove.Enabled = present && RechteFile is null;
+            var present0 = row is not null && row.TryGetValue("dokument_" + type, out var flag) && flag == "true";
+            var status = new Label { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
+            var open = Theme.MakeButton("Öffnen");
+            var upload = Theme.MakeButton("Hochladen …");
+            var remove = Theme.MakeButton("Entfernen");
+            var docBox = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Width = 360, Margin = new Padding(0, 6, 0, 0) };
+            docBox.Controls.Add(status);
+            docBox.SetFlowBreak(status, true);
+            docBox.Controls.AddRange(new Control[] { open, upload, remove });
+            table.Controls.Add(new Label { Text = caption, AutoSize = true, MaximumSize = new Size(190, 0), Margin = new Padding(0, 14, 8, 0) });
+            table.Controls.Add(docBox);
+
+            var docType = type;
+            void Refresh()
+            {
+                var removed = DocRemove.Contains(docType);
+                var newFile = DocFiles.TryGetValue(docType, out var f) ? f : null;
+                var present = present0 && !removed;
+                status.Text = newFile is not null ? "Neue Datei: " + Path.GetFileName(newFile) + " (wird beim Speichern hochgeladen)"
+                    : removed ? "wird beim Speichern entfernt"
+                    : present ? "✓ vorhanden" : "nicht hochgeladen (freiwillig)";
+                status.ForeColor = present || newFile is not null ? Theme.Green : Theme.Muted;
+                open.Enabled = present && _id is not null && newFile is null;
+                remove.Enabled = present && newFile is null;
+            }
+
+            open.Click += async (_, _) =>
+            {
+                if (_id is null) return;
+                try
+                {
+                    UseWaitCursor = true;
+                    var (data, ext) = await _api.DownloadDocumentAsync(_id.Value, docType, kind: "staff");
+                    var dir = Path.Combine(Path.GetTempPath(), "U19Dokumente");
+                    Directory.CreateDirectory(dir);
+                    var path = Path.Combine(dir, $"staff-{docType}-{_id}{ext}");
+                    await File.WriteAllBytesAsync(path, data);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    Theme.ShowError(this, ex);
+                }
+                finally
+                {
+                    UseWaitCursor = false;
+                }
+            };
+            upload.Click += (_, _) =>
+            {
+                using var dialog = new OpenFileDialog { Filter = "Dokumente|*.pdf;*.jpg;*.jpeg;*.png|Alle Dateien|*.*" };
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                DocFiles[docType] = dialog.FileName;
+                DocRemove.Remove(docType);
+                Refresh();
+            };
+            remove.Click += (_, _) =>
+            {
+                DocRemove.Add(docType);
+                DocFiles.Remove(docType);
+                Refresh();
+            };
+            Refresh();
         }
-
-        open.Click += async (_, _) =>
-        {
-            if (_id is null) return;
-            try
-            {
-                UseWaitCursor = true;
-                var (data, ext) = await _api.DownloadDocumentAsync(_id.Value, "rechte", kind: "staff");
-                var dir = Path.Combine(Path.GetTempPath(), "U19Dokumente");
-                Directory.CreateDirectory(dir);
-                var path = Path.Combine(dir, $"staff-rechte-{_id}{ext}");
-                await File.WriteAllBytesAsync(path, data);
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
-            }
-            catch (Exception ex)
-            {
-                Theme.ShowError(this, ex);
-            }
-            finally
-            {
-                UseWaitCursor = false;
-            }
-        };
-        upload.Click += (_, _) =>
-        {
-            using var dialog = new OpenFileDialog { Filter = "Dokumente|*.pdf;*.jpg;*.jpeg;*.png|Alle Dateien|*.*" };
-            if (dialog.ShowDialog(this) != DialogResult.OK) return;
-            RechteFile = dialog.FileName;
-            RemoveRechte = false;
-            RefreshDoc();
-        };
-        remove.Click += (_, _) =>
-        {
-            RemoveRechte = true;
-            RechteFile = null;
-            RefreshDoc();
-        };
-        RefreshDoc();
 
         var ok = Theme.MakeButton("Speichern", primary: true);
         var cancel = Theme.MakeButton("Abbrechen");

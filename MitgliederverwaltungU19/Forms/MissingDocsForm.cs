@@ -4,12 +4,12 @@ using MitgliederverwaltungU19.Services;
 namespace MitgliederverwaltungU19.Forms;
 
 /// <summary>
-/// Fehlende Dokumente, Spieler und Staff getrennt (zwei Register). Spieler: NADA-Zertifikat, Reisepass, E-Card, Rechte &amp; Pflichten;
-/// Staff: Rechte &amp; Pflichten. Die Liste lässt sich auch als PDF oder Excel erstellen.
+/// Fehlende Dokumente der Spieler: NADA-Zertifikat, Reisepass, E-Card, Rechte &amp; Pflichten;
+/// beim Staff sind Dokumente freiwillig. Die Liste lässt sich auch als PDF oder Excel erstellen.
 /// </summary>
 public sealed class MissingDocsForm : Form
 {
-    public MissingDocsForm(ApiClient api, IReadOnlyList<Member> members, IReadOnlyList<Dictionary<string, string?>> staff)
+    public MissingDocsForm(ApiClient api, IReadOnlyList<Member> members)
     {
         Text = "Fehlende Dokumente";
         Theme.Prepare(this);
@@ -43,20 +43,20 @@ public sealed class MissingDocsForm : Form
             Mark(players, players.Rows.Add(cells.ToArray()));
         }
 
-        // Register Staff
-        var staffGrid = RosterDownload.BuildGrid(("Name", 40), ("Position", 25), ("Rechte & Pflichten", 35));
-        var staffMissing = staff
-            .Where(s => RosterDownload.StaffValue(s, "status") != "inaktiv" && RosterDownload.StaffValue(s, "dokument_rechte") != "true")
-            .OrderBy(s => RosterDownload.StaffName(s), StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-        foreach (var s in staffMissing)
-        {
-            Mark(staffGrid, staffGrid.Rows.Add(RosterDownload.StaffName(s), RosterDownload.StaffValue(s, "position"), "✗ fehlt"));
-        }
-
+        // Staff: Rechte & Pflichten und Foto des Reisepasses sind freiwillig, es gibt dort keine fehlenden Pflichtdokumente
         var tabs = new TabControl { Dock = DockStyle.Fill, Font = Theme.Bold };
         tabs.TabPages.Add(TabPage($"Spieler ({members.Count})", players, members.Count == 0 ? "Bei allen Spielern im Kader sind die Dokumente vollständig." : ""));
-        tabs.TabPages.Add(TabPage($"Staff ({staffMissing.Count})", staffGrid, staffMissing.Count == 0 ? "Bei allen Staff-Personen sind die Dokumente vollständig." : ""));
+        var staffPage = new TabPage("Staff") { BackColor = Theme.Background, Padding = new Padding(16) };
+        staffPage.Controls.Add(new Label
+        {
+            Dock = DockStyle.Top,
+            AutoSize = false,
+            Height = Theme.Px(60),
+            ForeColor = Theme.Muted,
+            Font = Theme.Body,
+            Text = "Beim Staff sind Rechte & Pflichten und das Foto des Reisepasses freiwillig. Wer sie hat, kann sie beim Bearbeiten der Person hochladen – es gibt hier keine fehlenden Pflichtdokumente.",
+        });
+        tabs.TabPages.Add(staffPage);
 
         Controls.Add(tabs);
         Controls.Add(info);

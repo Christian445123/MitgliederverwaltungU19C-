@@ -268,7 +268,7 @@ public sealed class ApiClient : IDisposable
                 {
                     if (p.Name == "dokumente" && p.Value.ValueKind == JsonValueKind.Object)
                     {
-                        row["dokument_rechte"] = p.Value.TryGetProperty("rechte", out var r) && r.ValueKind == JsonValueKind.True ? "true" : "false";
+                        foreach (var d in p.Value.EnumerateObject()) row["dokument_" + d.Name] = d.Value.ValueKind == JsonValueKind.True ? "true" : "false";
                         continue;
                     }
                     row[p.Name] = p.Value.ValueKind switch
