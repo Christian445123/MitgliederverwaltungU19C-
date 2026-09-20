@@ -17,7 +17,7 @@ Was der Installer macht
 - installiert nach C:\Program Files\Mitgliederverwaltung U19 (Administratorrechte erforderlich)
 - enthaelt .NET: auf dem Zielrechner muss nichts weiter installiert sein (Windows 10/11, 64 Bit)
 - legt Verknuepfungen im Startmenue und auf dem Desktop an
-- eine neuere Version ersetzt eine aeltere automatisch (Update)
+- eine neuere Version ersetzt eine aeltere automatisch (Update): die Dateien im Ordner werden ausgetauscht, auch eine fruehere Installation unter Program Files wird ersetzt
 - Deinstallation ueber "Einstellungen > Apps"
 - Die Verbindungseinstellungen (Adresse, API-Schluessel) liegen pro Benutzer in
   %APPDATA%\MitgliederverwaltungU19 und bleiben bei Update und Deinstallation erhalten.

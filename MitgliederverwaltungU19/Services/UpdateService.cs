@@ -205,9 +205,12 @@ public static class UpdateService
     /// </summary>
     public static void InstallAndExit(string msiPath)
     {
-        var installedExe = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Mitgliederverwaltung U19", "MitgliederverwaltungU19.exe");
-        var relaunch = File.Exists(installedExe) ? installedExe : (Environment.ProcessPath ?? installedExe);
+        // Der Installer schreibt alle Dateien nach C:\Mitgliederverwaltung (Systemlaufwerk) und ersetzt dort bei einem Update die Dateien
+        var installedExe = Path.Combine(Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\", "Mitgliederverwaltung", "MitgliederverwaltungU19.exe");
+        var running = Environment.ProcessPath;
+        var relaunch = running is not null && running.StartsWith(Path.GetDirectoryName(installedExe)!, StringComparison.OrdinalIgnoreCase)
+            ? running
+            : installedExe;
 
         static string Q(string s) => s.Replace("'", "''");
         var script = string.Join("\r\n", new[]

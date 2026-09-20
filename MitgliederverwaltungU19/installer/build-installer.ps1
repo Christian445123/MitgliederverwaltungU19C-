@@ -28,7 +28,7 @@ Write-Host "Version $msiVersion" -ForegroundColor Cyan
 $publishDir = Join-Path $installerDir 'publish'
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 dotnet publish $csproj -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
+    -p:PublishSingleFile=false -p:DebugType=none -p:DebugSymbols=false -p:SatelliteResourceLanguages=en `
     -o $publishDir -nologo
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish fehlgeschlagen.' }
 
