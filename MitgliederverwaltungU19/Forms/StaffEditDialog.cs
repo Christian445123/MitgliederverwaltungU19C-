@@ -44,7 +44,14 @@ internal sealed class StaffEditDialog : Form
             var current = row is not null && row.TryGetValue(key, out var v) ? v ?? "" : "";
             table.Controls.Add(new Label { Text = label + (required ? " *" : ""), AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
             Control input;
-            if (isDate)
+            if (key == "nada")
+            {
+                var yesNo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+                yesNo.Items.AddRange(new object[] { "Nein", "Ja" });
+                yesNo.SelectedIndex = current.Equals("true", StringComparison.OrdinalIgnoreCase) || current is "1" || current.Equals("ja", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+                input = yesNo;
+            }
+            else if (isDate)
             {
                 var picker = new DateTimePicker { Format = DateTimePickerFormat.Short, ShowCheckBox = true, Width = 160 };
                 if (DateTime.TryParse(current, out var d)) picker.Value = d; else picker.Checked = false;
@@ -142,6 +149,7 @@ internal sealed class StaffEditDialog : Form
                 string? text = _inputs[key] switch
                 {
                     DateTimePicker p => p.Checked ? p.Value.ToString("yyyy-MM-dd") : null,
+                    ComboBox c when key == "nada" => c.SelectedIndex == 1 ? "1" : "0",
                     TextBox t => string.IsNullOrWhiteSpace(t.Text) ? null : t.Text.Trim(),
                     _ => null,
                 };

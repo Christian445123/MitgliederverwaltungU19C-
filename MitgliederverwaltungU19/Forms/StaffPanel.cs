@@ -15,10 +15,11 @@ public sealed class StaffPanel : UserControl
         ("nachname", "Nachname", false, false, true),
         ("vorname", "Vorname", false, false, true),
         ("position", "Position (z. B. HC, OC, DC, TM)", false, false, false),
+        ("nada", "Nada (Ja/Nein)", false, false, false),
         ("geburtsdatum", "Geburtsdatum", true, false, false),
         ("telefon", "Telefon", false, false, false),
         ("email", "Mail", false, false, false),
-        ("telefon_angehoeriger", "Telefon Angehöriger", false, false, false),
+        ("telefon_angehoeriger", "Telefonnummer Angehörige", false, false, false),
         ("reisepass_nr", "Reisepass Nr", false, false, false),
         ("reisepass_ausgestellt_am", "Reisepass ausgestellt am", true, false, false),
         ("reisepass_gueltig_bis", "Reisepass gültig bis", true, false, false),
@@ -125,7 +126,7 @@ public sealed class StaffPanel : UserControl
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         foreach (var (key, label, weight) in new[]
                  {
-                     ("name", "Name", 19f), ("position", "Position", 10f),
+                     ("name", "Name", 18f), ("position", "Position", 9f), ("nada", "Nada", 6f),
                      ("telefon", "Telefon", 12f), ("email", "E-Mail", 19f), ("reisepass_gueltig_bis", "Pass", 9f),
                      ("status", "Status", 7f), ("bestaetigt", "Bestätigt", 9f),
                  })
@@ -141,8 +142,8 @@ public sealed class StaffPanel : UserControl
             });
         }
         _grid.Columns.Add(Theme.LinkColumn());
-        var wish = new Dictionary<string, int> { ["name"] = 190, ["position"] = 110, ["telefon"] = 130, ["email"] = 210, ["reisepass_gueltig_bis"] = 105, ["status"] = 80, ["bestaetigt"] = 120 };
-        var hideOrder = new[] { "telefon", "status", "position", "reisepass_gueltig_bis", "bestaetigt", "email" };
+        var wish = new Dictionary<string, int> { ["name"] = 190, ["position"] = 110, ["nada"] = 70, ["telefon"] = 130, ["email"] = 210, ["reisepass_gueltig_bis"] = 105, ["status"] = 80, ["bestaetigt"] = 120 };
+        var hideOrder = new[] { "telefon", "status", "nada", "position", "reisepass_gueltig_bis", "bestaetigt", "email" };
         var fitting = false;
         void Refit()
         {
@@ -210,6 +211,8 @@ public sealed class StaffPanel : UserControl
 
     private static int IdOf(Dictionary<string, string?> row) => int.TryParse(Val(row, "id"), out var id) ? id : 0;
 
+    private static string NadaText(string value) => value.Equals("true", StringComparison.OrdinalIgnoreCase) || value is "1" ? "Ja" : "Nein";
+
     private static string FormatDate(string s) => DateTime.TryParse(s, out var d) ? d.ToString("dd.MM.yyyy") : s;
 
     private static VerifyPerson ToVerifyPerson(Dictionary<string, string?> r) =>
@@ -244,7 +247,7 @@ public sealed class StaffPanel : UserControl
             var pass = Expiry.Check(Val(r, "reisepass_gueltig_bis"), DateTime.Today.AddMonths(Expiry.PassWarnMonths), DateTime.Today);
             var confirmed = Val(r, "bestaetigt_am");
             var idx = _grid.Rows.Add(
-                NameOf(r), Val(r, "position"),
+                NameOf(r), Val(r, "position"), NadaText(Val(r, "nada")),
                 Val(r, "telefon"), Val(r, "email"),
                 Val(r, "reisepass_gueltig_bis").Length > 0 ? FormatDate(Val(r, "reisepass_gueltig_bis")) : "",
                 Val(r, "status") == "inaktiv" ? "Inaktiv" : "Aktiv",
