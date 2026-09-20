@@ -7,10 +7,11 @@ public sealed class LoginForm : Form
 {
     private readonly AppSettings _settings;
     private readonly ApiClient _api;
-    private readonly TextBox _user = new() { Dock = DockStyle.Top };
-    private readonly TextBox _password = new() { Dock = DockStyle.Top, UseSystemPasswordChar = true };
-    private readonly CheckBox _remember = new() { AutoSize = true, Text = "Angemeldet bleiben (auf diesem Rechner)", Margin = new Padding(0, 10, 0, 0) };
-    private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(400, 0), ForeColor = Theme.Danger, Margin = new Padding(0, 10, 0, 0) };
+    private const int ContentWidth = 392;
+    private readonly TextBox _user = new() { Width = ContentWidth };
+    private readonly TextBox _password = new() { Width = ContentWidth, UseSystemPasswordChar = true };
+    private readonly CheckBox _remember = new() { AutoSize = true, Text = "Anmeldedaten speichern (21 Tage)", Checked = true, Margin = new Padding(0, 14, 0, 0) };
+    private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(ContentWidth, 0), ForeColor = Theme.Danger, Margin = new Padding(0, 12, 0, 0) };
     private readonly Button _login = Theme.MakeButton("Anmelden", primary: true);
 
     /// <summary>Angemeldeter Benutzer nach erfolgreichem Login.</summary>
@@ -27,7 +28,7 @@ public sealed class LoginForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        ClientSize = new Size(440, 360);
+        ClientSize = new Size(440, 480);
 
         var quit = Theme.MakeButton("Beenden");
         quit.Click += (_, _) => DialogResult = DialogResult.Cancel;
@@ -39,23 +40,40 @@ public sealed class LoginForm : Form
         var intro = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(400, 0),
+            MaximumSize = new Size(ContentWidth, 0),
             ForeColor = Theme.Muted,
             Margin = new Padding(0, 6, 0, 0),
             Text = "Melde dich mit deinen Zugangsdaten des Web-Panels an (gleicher Benutzername und gleiches Passwort).",
         };
 
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0, 14, 0, 0) };
+        var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 18, 0, 0), WrapContents = false };
         buttons.Controls.AddRange(new Control[] { _login, quit });
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, AutoScroll = true };
+        var hint = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(ContentWidth, 0),
+            ForeColor = Theme.Muted,
+            Margin = new Padding(0, 4, 0, 0),
+            Text = "Nach 3 Wochen wird wieder nach dem Passwort gefragt. Das Passwort selbst wird nicht gespeichert.",
+        };
+
+        // Untereinander angeordnet, feste Breite: so ist immer die komplette Anmeldung sichtbar
+        var layout = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(24, 22, 24, 16),
+        };
         layout.Controls.Add(title);
         layout.Controls.Add(intro);
-        layout.Controls.Add(new Label { Text = "Benutzername", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 16, 0, 2) });
+        layout.Controls.Add(new Label { Text = "Benutzername", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 18, 0, 3) });
         layout.Controls.Add(_user);
-        layout.Controls.Add(new Label { Text = "Passwort", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 10, 0, 2) });
+        layout.Controls.Add(new Label { Text = "Passwort", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 12, 0, 3) });
         layout.Controls.Add(_password);
         layout.Controls.Add(_remember);
+        layout.Controls.Add(hint);
         layout.Controls.Add(buttons);
         layout.Controls.Add(_status);
         Controls.Add(layout);
