@@ -24,24 +24,34 @@ $msiVersion = ($parts[0..2] -join '.')
 
 Write-Host "Version $msiVersion" -ForegroundColor Cyan
 
-# 1) Veroeffentlichen
-$publishDir = Join-Path $installerDir 'publish'
-if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
+# Geloescht wird mit Wiederholungen (Virenscanner/Dropbox sperren frisch geschriebene Dateien manchmal kurz)
+function Remove-Folder([string]$path) {
+    for ($i = 1; $i -le 6; $i++) {
+        if (-not (Test-Path $path)) { return }
+        try { Remove-Item $path -Recurse -Force -ErrorAction Stop; return }
+        catch { Start-Sleep -Seconds 2 }
+    }
+    if (Test-Path $path) { throw "Ordner kann nicht geloescht werden (in Benutzung): $path" }
+}
+
+# Gebaut wird komplett in einem temporaeren Ordner AUSSERHALB von Dropbox und ohne Sonderzeichen im Pfad
+# (WiX kommt mit "#" in "MitgliederverwaltungU19_C#" nicht zurecht, und Dropbox sperrt die vielen Dateien beim Synchronisieren).
+$stage = Join-Path $env:TEMP 'U19Installer'
+Remove-Folder $stage
+$stageInstaller = Join-Path $stage 'installer'
+$publishDir = Join-Path $stageInstaller 'publish'
+New-Item -ItemType Directory -Force $publishDir | Out-Null
+Copy-Item (Join-Path $installerDir 'Package.wxs') $stageInstaller
+Copy-Item (Join-Path $installerDir 'dotnet-tools.json') $stageInstaller
+Copy-Item (Join-Path $projectDir 'app.ico') $stage
+
+# 1) Veroeffentlichen (Programm mit .NET, viele einzelne Dateien)
 dotnet publish $csproj -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=false -p:DebugType=none -p:DebugSymbols=false -p:SatelliteResourceLanguages=en `
     -o $publishDir -nologo
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish fehlgeschlagen.' }
 
-# 2) MSI bauen. WiX kommt mit Sonderzeichen im Pfad (z. B. "#" in "MitgliederverwaltungU19_C#") nicht zurecht,
-#    deshalb wird in einem temporaeren Ordner gebaut und die fertige MSI zurueckkopiert.
-$stage = Join-Path $env:TEMP 'U19Installer'
-if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
-$stageInstaller = Join-Path $stage 'installer'
-New-Item -ItemType Directory -Force (Join-Path $stageInstaller 'publish') | Out-Null
-Copy-Item (Join-Path $installerDir 'Package.wxs') $stageInstaller
-Copy-Item (Join-Path $installerDir 'dotnet-tools.json') $stageInstaller
-Copy-Item (Join-Path $projectDir 'app.ico') $stage
-Copy-Item (Join-Path $publishDir '*') (Join-Path $stageInstaller 'publish') -Recurse
+# 2) MSI bauen und ins Projekt zurueckkopieren
 
 Push-Location $stageInstaller
 try {
