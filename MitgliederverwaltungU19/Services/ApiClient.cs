@@ -120,9 +120,11 @@ public sealed class ApiClient : IDisposable
 
     public ApiClient(AppSettings settings)
     {
-        _http = new HttpClient
+        var baseUri = new Uri(NormalizeBaseUrl(settings.BaseUrl) + "/");
+        var inner = new HttpClientHandler { SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13 };
+        _http = new HttpClient(new TransportCryptoHandler(settings.TransportKey, new Uri(baseUri, "index.php"), inner))
         {
-            BaseAddress = new Uri(NormalizeBaseUrl(settings.BaseUrl) + "/"),
+            BaseAddress = baseUri,
             Timeout = TimeSpan.FromSeconds(60),
         };
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", settings.Token);
@@ -133,6 +135,7 @@ public sealed class ApiClient : IDisposable
     public static string NormalizeBaseUrl(string url)
     {
         url = url.Trim().TrimEnd('/');
+        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) url = "https://" + url[7..]; // unverschlüsselte Verbindungen gibt es nicht
         if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             url = "https://" + url;

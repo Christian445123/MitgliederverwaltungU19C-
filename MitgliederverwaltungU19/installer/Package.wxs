@@ -28,10 +28,11 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Mitgliederverwaltung U19 jetzt starten" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <CustomAction Id="LaunchApp" FileRef="AppExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
-    <!-- Zugangsdaten, die bei der Installation abgefragt werden (auch per Befehlszeile: msiexec /i ... API_URL=... API_KEY=... LICENSE_KEY=...) -->
+    <!-- Zugangsdaten, die bei der Installation abgefragt werden (auch per Befehlszeile: msiexec /i ... API_URL=... API_KEY=... LICENSE_KEY=... ENC_KEY=... (Verschlüsselungsschlüssel aus dem Webpanel)) -->
     <Property Id="API_URL" Value="https://mitgliedverwaltung.gamingcommunity.at/api" Secure="yes" />
     <Property Id="API_KEY" Secure="yes" Hidden="yes" />
     <Property Id="LICENSE_KEY" Secure="yes" Hidden="yes" />
+    <Property Id="ENC_KEY" Secure="yes" Hidden="yes" />
 
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
@@ -91,6 +92,7 @@
           <RegistryValue Name="ApiUrl" Type="string" Value="[API_URL]" KeyPath="yes" />
           <RegistryValue Name="ApiKey" Type="string" Value="[API_KEY]" />
           <RegistryValue Name="LicenseKey" Type="string" Value="[LICENSE_KEY]" />
+          <RegistryValue Name="EncKey" Type="string" Value="[ENC_KEY]" />
           <RegistryValue Name="Stamp" Type="string" Value="[Date] [Time]" />
         </RegistryKey>
       </Component>
