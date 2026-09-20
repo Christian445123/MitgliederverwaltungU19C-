@@ -27,7 +27,7 @@ public sealed class MainForm : Form
     private readonly Button _updateButton = Theme.MakeButton("", primary: true);
     private UpdateInfo? _update;
     private readonly System.Windows.Forms.Timer _licenseTimer = new() { Interval = 10 * 60 * 1000 };
-    private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(186, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 6, 0, 0) };
+    private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(186, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 4, 0, 10) };
     private readonly StatCard _cardTotal = new("Mitglieder gesamt", Theme.Navy);
     private readonly StatCard _cardKader = new("Im Kader", Theme.Accent);
     private readonly StatCard _cardConfirmed = new("Daten bestätigt", Color.FromArgb(0x10, 0xB9, 0x81));
@@ -112,7 +112,7 @@ public sealed class MainForm : Form
         };
         var brandText = new Label
         {
-            Text = "AFBÖ\nMitgliederverwaltung",
+            Text = "AFBÖ U19\nVerwaltung",
             Font = Theme.Bold,
             ForeColor = Color.White,
             AutoSize = true,
