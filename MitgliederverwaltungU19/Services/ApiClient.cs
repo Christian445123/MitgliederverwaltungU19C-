@@ -303,7 +303,7 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"staff/{id}", null, ct);
     }
 
-    /// <summary>Lädt einen Roster (PDF/Excel) vom Server. kind: "", "-ifaf", "-bekleidung", "-vereine", "-fehlend" oder "-abgelaufen".</summary>
+    /// <summary>Lädt einen Roster (PDF/Excel) vom Server. kind: "", "-ifaf", "-bekleidung", "-vereine", "-fehlend", "-abgelaufen" oder "-staff".</summary>
     public Task<byte[]> DownloadRosterAsync(string kind, string format, IDictionary<string, string> query, CancellationToken ct = default)
     {
         var qs = string.Join("&", query.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));

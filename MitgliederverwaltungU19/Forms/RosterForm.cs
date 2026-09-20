@@ -10,6 +10,7 @@ public sealed class RosterForm : Form
     private readonly RadioButton _alpha = new() { Text = "Alphabetischer Roster (Spieler A–Z)", AutoSize = true, Checked = true };
     private readonly RadioButton _clothing = new() { Text = "Rosterbekleidung (Größen je Spieler)", AutoSize = true };
     private readonly RadioButton _clubs = new() { Text = "Roster Vereine (ID, Name, Verein)", AutoSize = true };
+    private readonly RadioButton _staff = new() { Text = "Staff-Roster (Trainer/Betreuer A–Z)", AutoSize = true };
     private readonly RadioButton _missing = new() { Text = "Fehlende Dokumente (Spieler und Staff getrennt)", AutoSize = true };
     private readonly RadioButton _expired = new() { Text = "Abgelaufene Dokumente (Spieler und Staff getrennt)", AutoSize = true };
     private readonly CheckBox _onlyExpired = new() { Text = "Nur bereits abgelaufene (nicht die bald ablaufenden)", AutoSize = true, Visible = false, Location = new Point(0, 64) };
@@ -34,13 +35,14 @@ public sealed class RosterForm : Form
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        ClientSize = new Size(500, 540);
+        ClientSize = new Size(500, 570);
 
         _kader.Items.AddRange(new object[] { "Nur Spieler im Kader", "Alle Spieler", "Nur Spieler nicht im Kader" });
         _kader.SelectedIndex = 0;
 
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(20), AutoScroll = true };
         layout.Controls.Add(_alpha);
+        layout.Controls.Add(_staff);
         layout.Controls.Add(_clothing);
         layout.Controls.Add(_clubs);
         layout.Controls.Add(_missing);
@@ -74,7 +76,7 @@ public sealed class RosterForm : Form
 
         EventHandler switchMode = (_, _) =>
         {
-            _alphaBox.Visible = !_ifaf.Checked;
+            _alphaBox.Visible = !_ifaf.Checked && !_staff.Checked; // "Welche Spieler?" gilt nicht für den Staff-Roster
             _onlyExpired.Visible = _expired.Checked;
             _ifafBox.Visible = _ifaf.Checked;
         };
@@ -83,6 +85,7 @@ public sealed class RosterForm : Form
         _clothing.CheckedChanged += switchMode;
         _clubs.CheckedChanged += switchMode;
         _missing.CheckedChanged += switchMode;
+        _staff.CheckedChanged += switchMode;
         _expired.CheckedChanged += switchMode;
         _pdf.Click += async (_, _) => await CreateAsync("pdf");
         _excel.Click += async (_, _) => await CreateAsync("xlsx");
@@ -104,7 +107,7 @@ public sealed class RosterForm : Form
         }
 
         var ext = format == "pdf" ? "pdf" : "xlsx";
-        var suggestion = (_ifaf.Checked ? "IFAF-Roster-" + (_team.Text.Trim().Length > 0 ? _team.Text.Trim() : "Team") : _missing.Checked ? "Fehlende-Dokumente" : _expired.Checked ? "Abgelaufene-Dokumente" : _clubs.Checked ? "Roster-Vereine" : _clothing.Checked ? "Roster-Bekleidung" : "Roster-alphabetisch")
+        var suggestion = (_ifaf.Checked ? "IFAF-Roster-" + (_team.Text.Trim().Length > 0 ? _team.Text.Trim() : "Team") : _staff.Checked ? "Roster-Staff" : _missing.Checked ? "Fehlende-Dokumente" : _expired.Checked ? "Abgelaufene-Dokumente" : _clubs.Checked ? "Roster-Vereine" : _clothing.Checked ? "Roster-Bekleidung" : "Roster-alphabetisch")
                          + $"-{DateTime.Now:yyyy-MM-dd}.{ext}";
         using var dialog = new SaveFileDialog
         {
@@ -118,7 +121,7 @@ public sealed class RosterForm : Form
         _status.Text = "Roster wird erstellt …";
         try
         {
-            var data = await _api.DownloadRosterAsync(_ifaf.Checked ? "-ifaf" : _missing.Checked ? "-fehlend" : _expired.Checked ? "-abgelaufen" : _clothing.Checked ? "-bekleidung" : _clubs.Checked ? "-vereine" : "", format, query);
+            var data = await _api.DownloadRosterAsync(_ifaf.Checked ? "-ifaf" : _staff.Checked ? "-staff" : _missing.Checked ? "-fehlend" : _expired.Checked ? "-abgelaufen" : _clothing.Checked ? "-bekleidung" : _clubs.Checked ? "-vereine" : "", format, query);
             await File.WriteAllBytesAsync(dialog.FileName, data);
             _status.ForeColor = Theme.Green;
             _status.Text = "Gespeichert: " + dialog.FileName;
