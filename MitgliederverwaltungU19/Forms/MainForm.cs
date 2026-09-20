@@ -142,6 +142,8 @@ public sealed class MainForm : Form
             BackColor = Theme.Navy,
         };
 
+        nav.Resize += (_, _) => CompactNav(nav);
+
         SideNavButton Nav(string text, string glyph, Action click, bool active = false)
         {
             var b = new SideNavButton(text, glyph) { Width = 224, Active = active };
@@ -261,7 +263,7 @@ public sealed class MainForm : Form
         _cardMissing.Click += (_, _) => ShowMissing();
 
         // Filterzeile und Aktionen
-        var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
+        var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.Px(52)), WrapContents = true, Padding = new Padding(0, 6, 0, 0) };
         edit.Margin = new Padding(0, 0, 8, 0);
         link.Margin = new Padding(0, 0, 8, 0);
         verify.Margin = new Padding(0, 0, 8, 0);
@@ -332,6 +334,19 @@ public sealed class MainForm : Form
         }
         Controls.Add(content);
         Controls.Add(sidebar);
+    }
+
+    /// <summary>Verkleinert die Menüeinträge, wenn die Fensterhöhe nicht für alle reicht (kein Abschneiden, kein Scrollen).</summary>
+    private static void CompactNav(FlowLayoutPanel nav)
+    {
+        var buttons = nav.Controls.OfType<SideNavButton>().Where(b => b.Visible).ToList();
+        if (buttons.Count == 0 || nav.ClientSize.Height <= 0) return;
+        var per = (nav.ClientSize.Height - nav.Padding.Vertical) / buttons.Count - 2;
+        var height = Math.Clamp(per, Theme.Px(26), Theme.Px(38));
+        foreach (var b in buttons)
+        {
+            if (b.Height != height) b.Height = height;
+        }
     }
 
     /// <summary>Wechselt im Hauptfenster zwischen Spielerliste und Staff (kein eigenes Fenster).</summary>

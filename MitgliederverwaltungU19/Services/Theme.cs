@@ -164,7 +164,93 @@ public static class Theme
             {
                 form.Scale(new SizeF(Zoom, Zoom));
             }
+            var workArea = Screen.FromControl(form.Owner ?? form).WorkingArea;
+            form.MinimumSize = new Size(Math.Min(form.MinimumSize.Width, (int)(workArea.Width * 0.96)), Math.Min(form.MinimumSize.Height, (int)(workArea.Height * 0.96)));
+            FitContent(form);
+            KeepFitted(form);
             FitToScreen(form);
+        };
+    }
+
+    /// <summary>
+    /// Passt feste Dialoge an ihren Inhalt an: Das Fenster wird so groß, dass alles ohne Scrollen sichtbar ist
+    /// (höchstens so groß wie der Bildschirm). Ist der Bildschirm zu klein, bleibt die Bildlaufleiste als Rückfall.
+    /// </summary>
+    [ThreadStatic] private static bool _fitting;
+
+    private static void FitContent(Form form, bool growOnly = false)
+    {
+        _fitting = true; // die eigene Anpassung löst keine weitere aus
+        try
+        {
+            FitContentCore(form, growOnly);
+        }
+        finally
+        {
+            _fitting = false;
+        }
+    }
+
+    private static void FitContentCore(Form form, bool growOnly)
+    {
+        if (form.FormBorderStyle is not (FormBorderStyle.FixedDialog or FormBorderStyle.FixedSingle or FormBorderStyle.FixedToolWindow)) return;
+        if (form.WindowState != FormWindowState.Normal) return;
+
+        form.PerformLayout();
+        var right = 0;
+        var bottom = 0;
+        void Walk(Control parent)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                if (!c.Visible) continue;
+                if (c.Controls.Count > 0 && c is not ComboBox && c is not TextBoxBase)
+                {
+                    Walk(c);
+                    continue;
+                }
+                var r = form.RectangleToClient(c.RectangleToScreen(c.ClientRectangle));
+                bottom = Math.Max(bottom, r.Bottom + c.Margin.Bottom);
+                right = Math.Max(right, r.Right + c.Margin.Right);
+            }
+        }
+        Walk(form);
+        if (bottom == 0) return;
+
+        var area = Screen.FromControl(form.Owner ?? form).WorkingArea;
+        var frameW = form.Width - form.ClientSize.Width;
+        var frameH = form.Height - form.ClientSize.Height;
+        var pad = Px(20);
+        var width = Math.Min(Math.Max(form.ClientSize.Width, right + pad), (int)(area.Width * 0.96) - frameW);
+        var height = Math.Min(bottom + pad, (int)(area.Height * 0.96) - frameH);
+        height = Math.Max(height, Px(160));
+        if (growOnly) height = Math.Max(height, form.ClientSize.Height);
+        var target = new Size(width, height);
+        if (target != form.ClientSize) form.ClientSize = target;
+    }
+
+    /// <summary>Feste Dialoge wachsen mit, wenn später Inhalt erscheint (Fortschritt, Fehlermeldung, Ergebnisliste).</summary>
+    private static void KeepFitted(Form form)
+    {
+        if (form.FormBorderStyle is not (FormBorderStyle.FixedDialog or FormBorderStyle.FixedSingle or FormBorderStyle.FixedToolWindow)) return;
+        var pending = false;
+        var refits = 0; // Schutz gegen Schwingen: höchstens 6 nachträgliche Anpassungen pro Dialog
+        form.Layout += (_, _) =>
+        {
+            if (_fitting || pending || refits >= 6 || !form.IsHandleCreated) return;
+            pending = true;
+            form.BeginInvoke(() =>
+            {
+                pending = false;
+                if (form.IsDisposed) return;
+                var before = form.ClientSize;
+                FitContent(form, growOnly: true);
+                if (form.ClientSize != before)
+                {
+                    refits++;
+                    FitToScreen(form);
+                }
+            });
         };
     }
 

@@ -108,7 +108,7 @@ public sealed class StaffPanel : UserControl
         edit.Enabled = _canWrite;
         link.Enabled = verify.Enabled = _canWrite;
         delete.Enabled = _canDelete;
-        var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
+        var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.Px(52)), WrapContents = true, Padding = new Padding(0, 6, 0, 0) };
         filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, edit, link, verify, delete });
 
         // Tabelle in einer Karte
