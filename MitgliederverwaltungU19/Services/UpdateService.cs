@@ -201,7 +201,7 @@ public static class UpdateService
 
     /// <summary>
     /// Startet die Installation und beendet danach die Anwendung. Ein kleines PowerShell-Skript wartet, bis die
-    /// Anwendung geschlossen ist, startet die .msi (fragt nach Administratorrechten) und öffnet danach die neue Version.
+    /// Anwendung geschlossen ist, installiert die .msi still im Hintergrund (ohne Fenster; Windows fragt höchstens einmal nach Administratorrechten) und öffnet danach die neue Version.
     /// </summary>
     public static void InstallAndExit(string msiPath)
     {
@@ -217,7 +217,7 @@ public static class UpdateService
         {
             "Start-Sleep -Seconds 3",
             "try {",
-            $"  $p = Start-Process msiexec.exe -ArgumentList @('/i', '\"{Q(msiPath)}\"', '/passive', '/norestart') -Verb RunAs -Wait -PassThru",
+            $"  $p = Start-Process msiexec.exe -ArgumentList @('/i', '\"{Q(msiPath)}\"', '/qn', '/norestart', '/l*v', '\"{Q(Path.Combine(Path.GetDirectoryName(msiPath)!, "install.log"))}\"') -Verb RunAs -Wait -PassThru",
             "} catch { }",
             $"if (Test-Path -LiteralPath '{Q(relaunch)}') {{ Start-Process -FilePath '{Q(relaunch)}' }}",
         });

@@ -25,6 +25,7 @@ public sealed class MainForm : Form
     private bool _expiryAnnounced;
     private readonly Button _updateButton = Theme.MakeButton("", primary: true);
     private UpdateInfo? _update;
+    private string? _updateMsi; // bereits im Hintergrund geladene Installationsdatei
     private readonly System.Windows.Forms.Timer _licenseTimer = new() { Interval = 10 * 60 * 1000 };
     private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(186, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 4, 0, 10) };
     private readonly StatCard _cardTotal = new("Mitglieder gesamt", Theme.Navy);
@@ -201,6 +202,12 @@ public sealed class MainForm : Form
         _updateButton.Margin = new Padding(18, 8, 0, 4);
         _updateButton.Click += (_, _) =>
         {
+            if (_updateMsi is not null && File.Exists(_updateMsi))
+            {
+                _footer.Text = "Update wird im Hintergrund installiert – die Anwendung startet gleich neu …";
+                UpdateService.InstallAndExit(_updateMsi);
+                return;
+            }
             using var form = new UpdateForm(_settings, _update);
             form.ShowDialog(this);
         };
@@ -752,10 +759,25 @@ public sealed class MainForm : Form
             _updateButton.Text = $"⬆ Update {info.Version} verfügbar";
             _updateButton.Visible = true;
             _footer.Text = $"Neue Version {info.Version} verfügbar – Button „Update“ in der Werkzeugleiste oder Einstellungen › Updates.";
+            _ = PreloadUpdateAsync(info);
         }
         catch (Exception)
         {
             // Keine Internetverbindung o. Ä.: beim Start nicht stören
+        }
+    }
+
+    /// <summary>Lädt die neue Version schon im Hintergrund herunter, damit die Installation danach sofort und ohne Rückfrage läuft.</summary>
+    private async Task PreloadUpdateAsync(UpdateInfo info)
+    {
+        try
+        {
+            _updateMsi = await UpdateService.DownloadAsync(info, _settings.GitHubToken);
+            _updateButton.Text = $"⬆ Update {info.Version} installieren";
+        }
+        catch (Exception)
+        {
+            _updateMsi = null; // Die Installation lädt dann selbst herunter (Update-Fenster)
         }
     }
 

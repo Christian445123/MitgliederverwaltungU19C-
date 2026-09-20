@@ -142,12 +142,6 @@ public sealed class UpdateForm : Form
     private async Task InstallAsync()
     {
         if (_found is not { } info) return;
-        var answer = MessageBox.Show(this,
-            $"Version {info.Version} wird heruntergeladen und installiert.\n\n" +
-            "Die Anwendung wird dafür beendet und danach automatisch neu gestartet. " +
-            "Windows fragt einmal nach Administratorrechten.\n\nJetzt installieren?",
-            "Update installieren", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-        if (answer != DialogResult.Yes) return;
 
         SaveOptions();
         _check.Enabled = _install.Enabled = false;
