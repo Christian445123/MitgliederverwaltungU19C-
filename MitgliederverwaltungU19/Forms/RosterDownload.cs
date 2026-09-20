@@ -34,7 +34,7 @@ internal static class RosterDownload
     }
 
     /// <summary>Leiste unten mit „Als PDF“, „Als Excel“, Statusanzeige und „Schließen“.</summary>
-    public static Panel BuildBar(Form owner, ApiClient api, string kind, string name, Func<Dictionary<string, string>> query)
+    public static Panel BuildBar(Control owner, ApiClient api, string kind, string name, Func<Dictionary<string, string>> query)
     {
         var status = new Label { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(8, 9, 0, 0), MaximumSize = new Size(420, 0) };
         var pdf = Theme.MakeButton("Liste als PDF …", primary: true);
@@ -42,11 +42,14 @@ internal static class RosterDownload
         var close = Theme.MakeButton("Schließen");
         pdf.Click += async (_, _) => { pdf.Enabled = excel.Enabled = false; await SaveAsync(owner, api, kind, "pdf", name, query(), status); pdf.Enabled = excel.Enabled = true; };
         excel.Click += async (_, _) => { pdf.Enabled = excel.Enabled = false; await SaveAsync(owner, api, kind, "xlsx", name, query(), status); pdf.Enabled = excel.Enabled = true; };
-        close.Click += (_, _) => owner.Close();
-        owner.CancelButton = close;
+        if (owner is Form form)
+        {
+            close.Click += (_, _) => form.Close();
+            form.CancelButton = close;
+        }
 
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Theme.Px(56), Padding = new Padding(12, 8, 12, 0), BackColor = Theme.Background };
-        bar.Controls.AddRange(new Control[] { pdf, excel, close, status });
+        bar.Controls.AddRange(owner is Form ? new Control[] { pdf, excel, close, status } : new Control[] { pdf, excel, status });
         return bar;
     }
 

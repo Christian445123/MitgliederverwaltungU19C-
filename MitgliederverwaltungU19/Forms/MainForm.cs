@@ -40,6 +40,7 @@ public sealed class MainForm : Form
     private Panel? _playersPage;
     private StaffPanel? _staffPanel;
     private bool _staffLoaded;
+    private MissingDocsPanel? _missingPanel;
     private SideNavButton? _navExpiry;
     private SideNavButton? _navMissing;
     private bool _licenseBusy;
@@ -342,6 +343,8 @@ public sealed class MainForm : Form
             _staffPanel = new StaffPanel(_api, _ping) { Visible = false };
             Controls.Add(_staffPanel);
         }
+        _missingPanel = new MissingDocsPanel(_api) { Visible = false };
+        Controls.Add(_missingPanel);
         Controls.Add(content);
         Controls.Add(sidebar);
     }
@@ -360,22 +363,27 @@ public sealed class MainForm : Form
     }
 
     /// <summary>Wechselt im Hauptfenster zwischen Spielerliste und Staff (kein eigenes Fenster).</summary>
-    private void ShowPage(bool staff)
+    private void ShowPage(bool staff) => ShowPage(staff ? "staff" : "players");
+
+    private void ShowPage(string page)
     {
         if (_playersPage is null) return;
-        if (staff && _staffPanel is null) return;
-        _playersPage.Visible = !staff;
-        if (_staffPanel is not null) _staffPanel.Visible = staff;
-        if (_navMembers is not null) _navMembers.Active = !staff;
-        if (_navStaff is not null) _navStaff.Active = staff;
+        if (page == "staff" && _staffPanel is null) return;
+        _playersPage.Visible = page == "players";
+        if (_staffPanel is not null) _staffPanel.Visible = page == "staff";
+        if (_missingPanel is not null) _missingPanel.Visible = page == "missing";
+        if (_navMembers is not null) _navMembers.Active = page == "players";
+        if (_navStaff is not null) _navStaff.Active = page == "staff";
+        if (_navMissing is not null) _navMissing.Active = page == "missing";
         _navMembers?.Invalidate();
         _navStaff?.Invalidate();
-        if (staff && !_staffLoaded)
+        _navMissing?.Invalidate();
+        if (page == "staff" && !_staffLoaded)
         {
             _staffLoaded = true;
             _ = _staffPanel!.ReloadAsync();
         }
-        else if (!staff)
+        else if (page == "players")
         {
             _grid.Focus();
         }
@@ -584,8 +592,9 @@ public sealed class MainForm : Form
     private async void ShowMissing()
     {
         var staff = await LoadStaffAsync();
-        using var form = new MissingDocsForm(_api, MissingDocuments(), staff);
-        form.ShowDialog(this);
+        if (_missingPanel is null) return;
+        _missingPanel.Load(MissingDocuments(), staff);
+        ShowPage("missing");
     }
 
     private static VerifyPerson ToVerifyPerson(Member m) =>

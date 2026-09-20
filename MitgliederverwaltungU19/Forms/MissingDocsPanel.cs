@@ -7,17 +7,24 @@ namespace MitgliederverwaltungU19.Forms;
 /// Fehlende Dokumente, Spieler und Staff getrennt. Spieler (ohne Personen mit Staff-Position): NADA-Zertifikat, Reisepass, E-Card, Rechte &amp; Pflichten;
 /// Staff: Rechte &amp; Pflichten und Foto des Reisepasses sind freiwillig (nur Hinweis). Die Liste lässt sich auch als PDF oder Excel erstellen.
 /// </summary>
-public sealed class MissingDocsForm : Form
+public sealed class MissingDocsPanel : UserControl
 {
-    public MissingDocsForm(ApiClient api, IReadOnlyList<Member> members, IReadOnlyList<Dictionary<string, string?>> staff)
+    private readonly ApiClient _api;
+
+    public MissingDocsPanel(ApiClient api)
     {
-        Text = "Fehlende Dokumente";
-        Theme.Prepare(this);
-        Icon = Theme.AppIcon;
+        _api = api;
+        Dock = DockStyle.Fill;
         BackColor = Theme.Background;
-        StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(900, 600);
-        MinimumSize = new Size(640, 400);
+        Padding = new Padding(Theme.Px(16), Theme.Px(8), Theme.Px(16), Theme.Px(8));
+    }
+
+    /// <summary>Baut die Register (Spieler/Staff) mit den aktuellen Daten neu auf.</summary>
+    public void Load(IReadOnlyList<Member> members, IReadOnlyList<Dictionary<string, string?>> staff)
+    {
+        SuspendLayout();
+        foreach (var old in Controls.Cast<Control>().ToList()) { Controls.Remove(old); old.Dispose(); }
+        var api = _api;
 
         var info = new Label
         {
@@ -67,9 +74,12 @@ public sealed class MissingDocsForm : Form
         tabs.TabPages.Add(TabPage($"Spieler ({members.Count})", players, members.Count == 0 ? "Bei allen Spielern im Kader sind die Dokumente vollständig." : ""));
         tabs.TabPages.Add(TabPage($"Staff ({staffOpen.Count})", staffGrid, staffOpen.Count == 0 ? "Beim Staff ist alles hochgeladen (die Dokumente sind freiwillig)." : ""));
 
+        var title = new Label { Dock = DockStyle.Top, Height = Theme.Px(40), Font = Theme.Bold, Text = "Fehlende Dokumente", TextAlign = ContentAlignment.MiddleLeft };
         Controls.Add(tabs);
         Controls.Add(info);
+        Controls.Add(title);
         Controls.Add(RosterDownload.BuildBar(this, api, "-fehlend", "Fehlende-Dokumente", () => new Dictionary<string, string> { ["kader"] = "kader" }));
+        ResumeLayout(true);
     }
 
     private static TabPage TabPage(string title, DataGridView grid, string emptyHint)
