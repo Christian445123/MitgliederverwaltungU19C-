@@ -86,11 +86,28 @@ public static class UpdateService
             var body = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
             {
+                // 404 heißt entweder "noch kein Release" oder "Repository nicht sichtbar (privat/falscher Name)": unterscheiden
+                string notFound = "";
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    var repoVisible = false;
+                    try
+                    {
+                        using var repoReq = Request($"https://api.github.com/repos/{repo}", token, "application/vnd.github+json");
+                        using var repoResp = await Http.SendAsync(repoReq, ct);
+                        repoVisible = repoResp.IsSuccessStatusCode;
+                    }
+                    catch (HttpRequestException)
+                    {
+                    }
+                    notFound = repoVisible
+                        ? $"Für das Repository „{repo}“ wurde noch kein Release veröffentlicht. Das Update-Angebot erscheint, sobald auf GitHub unter „Releases“ ein Release mit einer .msi-Datei und einem Tag wie v{UpdateService.CurrentVersion.Major}.{UpdateService.CurrentVersion.Minor + 1}.0 existiert."
+                        : $"Das Repository „{repo}“ ist für die Anwendung nicht sichtbar. Bitte den Namen prüfen (Besitzer/Repository); ist es privat, muss unten ein GitHub-Zugriffstoken eingetragen werden.";
+                }
+
                 throw new InvalidOperationException(response.StatusCode switch
                 {
-                    HttpStatusCode.NotFound => string.IsNullOrWhiteSpace(token)
-                        ? "Es wurde noch kein Release veröffentlicht (GitHub → Releases → „Create a new release“). Ist das Repository privat, muss unten zusätzlich ein GitHub-Zugriffstoken eingetragen werden."
-                        : "Kein Release gefunden. Wurde schon eines veröffentlicht, und darf der Token auf dieses Repository zugreifen?",
+                    HttpStatusCode.NotFound => notFound,
                     HttpStatusCode.Unauthorized => "Der GitHub-Zugriffstoken ist ungültig oder abgelaufen.",
                     HttpStatusCode.Forbidden => "GitHub verweigert den Zugriff (Abfragelimit erreicht oder Token ohne Berechtigung). Bitte später erneut versuchen.",
                     _ => $"GitHub-Fehler {(int)response.StatusCode}.",
