@@ -14,7 +14,7 @@ Neuen Installer bauen (nach Aenderungen am Programm)
 
 Was der Installer macht
 -----------------------
-- installiert nach C:\Program Files\Mitgliederverwaltung U19 (Administratorrechte erforderlich)
+- installiert nach C:Mitgliederverwaltung (Systemlaufwerk, Administratorrechte erforderlich); dort liegen alle Programmdateien inkl. .NET
 - enthaelt .NET: auf dem Zielrechner muss nichts weiter installiert sein (Windows 10/11, 64 Bit)
 - legt Verknuepfungen im Startmenue und auf dem Desktop an
 - eine neuere Version ersetzt eine aeltere automatisch (Update): die Dateien im Ordner werden ausgetauscht, auch eine fruehere Installation unter Program Files wird ersetzt
