@@ -27,6 +27,8 @@ public sealed class MainForm : Form
     private UpdateInfo? _update;
     private string? _updateMsi; // bereits im Hintergrund geladene Installationsdatei
     private readonly System.Windows.Forms.Timer _licenseTimer = new() { Interval = 10 * 60 * 1000 };
+    private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 3 * 60 * 60 * 1000 };
+    private readonly Label _versionLabel = new() { AutoSize = true, MaximumSize = new Size(202, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 6, 0, 0), UseMnemonic = false };
     private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(202, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 4, 0, 10) };
     private readonly StatCard _cardTotal = new("Mitglieder gesamt", Theme.Navy);
     private readonly StatCard _cardKader = new("Im Kader", Theme.Accent);
@@ -48,7 +50,7 @@ public sealed class MainForm : Form
         _api = api;
         _ping = ping;
 
-        Text = "Mitgliederverwaltung U19";
+        Text = $"Mitgliederverwaltung U19 – Version {UpdateService.CurrentVersion}";
         Theme.Prepare(this);
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
@@ -64,6 +66,8 @@ public sealed class MainForm : Form
             await CheckLicenseAsync();
             await ReloadAsync();
             await CheckForUpdateAsync();
+            _updateTimer.Tick += async (_, _) => await CheckForUpdateAsync();
+            _updateTimer.Start();
         };
         FormClosed += (_, _) => _api.Dispose();
     }
@@ -226,6 +230,8 @@ public sealed class MainForm : Form
         };
         bottom.Controls.Add(account);
         bottom.Controls.Add(_licenseLabel);
+        bottom.Controls.Add(_versionLabel);
+        ShowVersion();
 
         // Reihenfolge: Fill zuerst, dann Bottom, dann Top
         sidebar.Controls.Add(nav);
@@ -778,22 +784,60 @@ public sealed class MainForm : Form
     }
 
     /// <summary>Sucht beim Start still im Hintergrund nach einer neuen Version und blendet bei Erfolg einen Button ein.</summary>
+    /// <summary>
+    /// Zeigt in der Seitenleiste die installierte und die neueste Version: grün = aktuell, orange = Update verfügbar,
+    /// grau = Prüfung nicht möglich. So sieht man immer, ob die Anwendung auf dem neuesten Stand ist.
+    /// </summary>
+    private void ShowVersion(string? checkNote = null)
+    {
+        var installed = UpdateService.CurrentVersion;
+        var latest = UpdateService.LatestVersion;
+        var text = $"Version {installed} (installiert)";
+        var color = Theme.SidebarText;
+        if (latest is not null)
+        {
+            if (latest > installed)
+            {
+                text += $"\nNeueste: {latest} – Update verfügbar";
+                color = Theme.AccentLight;
+            }
+            else
+            {
+                text += $"\nNeueste: {latest} ✓ aktuell";
+                color = Theme.GreenLight;
+            }
+        }
+        else
+        {
+            text += "\n" + (checkNote ?? "Neueste: wird geprüft …");
+        }
+        _versionLabel.Text = text;
+        _versionLabel.ForeColor = color;
+    }
+
     private async Task CheckForUpdateAsync()
     {
-        if (!_settings.AutoCheckUpdates || string.IsNullOrWhiteSpace(_settings.GitHubRepo)) return;
+        if (!_settings.AutoCheckUpdates || string.IsNullOrWhiteSpace(_settings.GitHubRepo))
+        {
+            ShowVersion("Neueste: Prüfung ausgeschaltet");
+            return;
+        }
         try
         {
             var info = await UpdateService.CheckAsync(_settings.GitHubRepo, _settings.GitHubToken);
+            ShowVersion();
             if (info is null) return;
+            var isNew = _update is null || _update.Version != info.Version;
             _update = info;
             _updateButton.Text = $"⬆ Update {info.Version} verfügbar";
             _updateButton.Visible = true;
             _footer.Text = $"Neue Version {info.Version} verfügbar – Button „Update“ in der Werkzeugleiste oder Einstellungen › Updates.";
-            _ = PreloadUpdateAsync(info);
+            if (isNew) _ = PreloadUpdateAsync(info);
         }
         catch (Exception)
         {
             // Keine Internetverbindung o. Ä.: beim Start nicht stören
+            ShowVersion("Neueste: Prüfung nicht möglich");
         }
     }
 

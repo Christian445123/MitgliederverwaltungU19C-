@@ -75,6 +75,7 @@ public sealed class LoginForm : Form
         layout.Controls.Add(_remember);
         layout.Controls.Add(hint);
         layout.Controls.Add(buttons);
+        layout.Controls.Add(new Label { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(0, 14, 0, 0), Text = $"Version {UpdateService.CurrentVersion}" });
         layout.Controls.Add(_status);
         Controls.Add(layout);
 

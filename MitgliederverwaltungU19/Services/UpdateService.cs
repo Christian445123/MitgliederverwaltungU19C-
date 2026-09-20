@@ -19,6 +19,9 @@ public static class UpdateService
 {
     private static readonly HttpClient Http = CreateClient();
 
+    /// <summary>Neueste bei GitHub veröffentlichte Version (nach der letzten erfolgreichen Prüfung), sonst null.</summary>
+    public static Version? LatestVersion { get; private set; }
+
     private static HttpClient CreateClient()
     {
         var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
@@ -122,6 +125,7 @@ public static class UpdateService
             {
                 throw new InvalidOperationException($"Der Release-Name „{tag}“ enthält keine Versionsnummer (erwartet z. B. v2.2.0).");
             }
+            LatestVersion = version;
             if (version <= CurrentVersion)
             {
                 return null;
