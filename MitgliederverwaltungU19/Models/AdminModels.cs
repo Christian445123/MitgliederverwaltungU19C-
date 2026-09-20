@@ -49,3 +49,6 @@ public sealed record LogPage(int Total, int Page, int Pages, List<LogEntry> Entr
 
 /// <summary>Persönlicher Zugangslink eines Mitglieds; Password ist nur nach dem Erzeugen/Versenden gefüllt.</summary>
 public sealed record LinkInfo(string Name, string Email, string Link, string? VerifiedAt, string? Password, string Message);
+
+/// <summary>Ergebnis eines Massenmail-Versands je Person: status = sent, no_email oder error.</summary>
+public sealed record SendLinkResult(int Id, string Name, string Status, string Message);

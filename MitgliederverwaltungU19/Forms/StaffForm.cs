@@ -60,6 +60,8 @@ public sealed class StaffForm : Form
         var edit = Theme.MakeButton("Bearbeiten");
         var delete = Theme.MakeButton("Auswahl löschen");
         var export = Theme.MakeButton("Export CSV");
+        var link = Theme.MakeButton("Zugangslink …");
+        var verify = Theme.MakeButton("Bestätigung …");
         export.Click += async (_, _) =>
         {
             using var dialog = new SaveFileDialog { Filter = "CSV (Excel)|*.csv", FileName = $"staff-{DateTime.Now:yyyy-MM-dd}.csv" };
@@ -74,10 +76,10 @@ public sealed class StaffForm : Form
             }
         };
         _search.Margin = new Padding(0, 2, 8, 0);
-        tools.Controls.AddRange(new Control[] { _search, refresh, add, edit, delete, export, _info });
+        tools.Controls.AddRange(new Control[] { _search, refresh, add, edit, link, verify, delete, export, _info });
         if (!canWrite)
         {
-            add.Enabled = edit.Enabled = delete.Enabled = false;
+            add.Enabled = edit.Enabled = delete.Enabled = link.Enabled = verify.Enabled = false;
         }
 
         _grid.Dock = DockStyle.Fill;
@@ -90,7 +92,7 @@ public sealed class StaffForm : Form
         Theme.StyleGrid(_grid);
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
         _grid.AutoGenerateColumns = false;
-        foreach (var (key, label) in new[] { ("nachname", "Nachname"), ("vorname", "Vorname"), ("position", "Position"), ("nada", "Nada"), ("nada_gueltig_bis", "Nada gültig bis"), ("geburtsdatum", "Geburtsdatum"), ("telefon", "Telefon"), ("email", "Mail"), ("reisepass_gueltig_bis", "Reisepass gültig bis"), ("status", "Status") })
+        foreach (var (key, label) in new[] { ("nachname", "Nachname"), ("vorname", "Vorname"), ("position", "Position"), ("nada", "Nada"), ("nada_gueltig_bis", "Nada gültig bis"), ("geburtsdatum", "Geburtsdatum"), ("telefon", "Telefon"), ("email", "Mail"), ("reisepass_gueltig_bis", "Reisepass gültig bis"), ("status", "Status"), ("bestaetigt_am", "Bestätigt") })
         {
             _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = key, HeaderText = label });
         }
@@ -99,6 +101,16 @@ public sealed class StaffForm : Form
         Controls.Add(tools);
 
         refresh.Click += async (_, _) => await ReloadAsync();
+        link.Click += (_, _) =>
+        {
+            if (Selected().FirstOrDefault() is { } row && int.TryParse(Val(row, "id"), out var id))
+            {
+                using var form = new MemberLinkForm(_api, "staff", id, $"{Val(row, "nachname")} {Val(row, "vorname")}".Trim());
+                form.ShowDialog(this);
+                _ = ReloadAsync();
+            }
+        };
+        verify.Click += async (_, _) => await VerifyAsync();
         add.Click += async (_, _) => await OpenEditorAsync(null);
         edit.Click += async (_, _) => { if (Selected().FirstOrDefault() is { } row) await OpenEditorAsync(row); };
         delete.Click += async (_, _) => await DeleteAsync();
@@ -140,6 +152,20 @@ public sealed class StaffForm : Form
         cell.ToolTipText = new ExpiryItem(new Models.Member(), "", e.Date.Value, e.State, e.Days).Describe();
     }
 
+    private static string ConfirmedText(string value) =>
+        DateTime.TryParse(value, out var d) ? $"✓ {d:dd.MM.yyyy}" : "Ausstehend";
+
+    private static VerifyPerson ToVerifyPerson(Dictionary<string, string?> r) =>
+        new(int.TryParse(Val(r, "id"), out var id) ? id : 0, $"{Val(r, "nachname")} {Val(r, "vorname")}".Trim(), Val(r, "status") != "inaktiv", Val(r, "email").Length > 0, Val(r, "bestaetigt_am").Length > 0);
+
+    /// <summary>Bestätigung zurücksetzen und/oder Massenmail zur Datenprüfung (Auswahl oder alle Staff-Personen).</summary>
+    private async Task VerifyAsync()
+    {
+        using var form = new VerificationForm(_api, "staff", _all.Select(ToVerifyPerson).ToList(), Selected().Select(ToVerifyPerson).ToList());
+        form.ShowDialog(this);
+        if (form.Changed) await ReloadAsync();
+    }
+
     private void ApplyFilter()
     {
         var q = _search.Text.Trim();
@@ -149,7 +175,7 @@ public sealed class StaffForm : Form
         var count = 0;
         foreach (var r in rows)
         {
-            var i = _grid.Rows.Add(_grid.Columns.Cast<DataGridViewColumn>().Select(c => (object)Val(r, c.Name)).ToArray());
+            var i = _grid.Rows.Add(_grid.Columns.Cast<DataGridViewColumn>().Select(c => (object)(c.Name == "bestaetigt_am" ? ConfirmedText(Val(r, c.Name)) : Val(r, c.Name))).ToArray());
             _grid.Rows[i].Tag = r;
             MarkExpiry(_grid.Rows[i].Cells["nada_gueltig_bis"], Expiry.Check(Val(r, "nada_gueltig_bis"), DateTime.Today.AddMonths(Expiry.NadaWarnMonths), DateTime.Today, Expiry.NadaUrgentDays, redOnDay: true));
             MarkExpiry(_grid.Rows[i].Cells["reisepass_gueltig_bis"], Expiry.Check(Val(r, "reisepass_gueltig_bis"), DateTime.Today.AddMonths(Expiry.PassWarnMonths), DateTime.Today));

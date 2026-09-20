@@ -8,6 +8,7 @@ public sealed class MemberLinkForm : Form
 {
     private readonly ApiClient _api;
     private readonly int _memberId;
+    private readonly string _entity;
     private readonly TextBox _link = new() { Dock = DockStyle.Top, ReadOnly = true, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8) };
     private readonly TextBox _code = new() { Dock = DockStyle.Top, ReadOnly = true, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8), Font = new Font("Consolas", 12f, FontStyle.Bold) };
     private readonly Label _who = new() { AutoSize = true, MaximumSize = new Size(560, 0), Font = Theme.Bold };
@@ -15,18 +16,23 @@ public sealed class MemberLinkForm : Form
     private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(0, 10, 0, 0) };
     private readonly Panel _codeBox = new() { AutoSize = true, Visible = false, Dock = DockStyle.Top };
 
-    public MemberLinkForm(ApiClient api, Member member)
+    public MemberLinkForm(ApiClient api, Member member) : this(api, "members", member.Id, member.FullName)
+    {
+    }
+
+    public MemberLinkForm(ApiClient api, string entity, int id, string fullName)
     {
         _api = api;
-        _memberId = member.Id;
-        Text = "Zugangslink – " + member.FullName;
+        _memberId = id;
+        _entity = entity;
+        Text = "Zugangslink – " + fullName;
         Font = Theme.Body;
         Icon = Theme.AppIcon;
         BackColor = Color.White;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        ClientSize = new Size(620, 520);
+        ClientSize = new Size(640, 540);
 
         var copy = Theme.MakeButton("Link kopieren");
         copy.Click += (_, _) => { if (_link.Text.Length > 0) Clipboard.SetText(_link.Text); _status.ForeColor = Theme.Green; _status.Text = "Link kopiert."; };
@@ -35,10 +41,12 @@ public sealed class MemberLinkForm : Form
         var newLink = Theme.MakeButton("Neuen Link erzeugen");
         var newCode = Theme.MakeButton("Neuen Zugangscode erzeugen");
         var mail = Theme.MakeButton("Per E-Mail senden", primary: true);
+        var reset = Theme.MakeButton("Bestätigung zurücksetzen");
         var close = Theme.MakeButton("Schließen");
         newLink.Click += async (_, _) => await ActAsync("regenerate_link", "Der bisherige Link wird ungültig. Neuen Link erzeugen?");
         newCode.Click += async (_, _) => await ActAsync("regenerate_password", "Der bisherige Zugangscode wird ungültig. Neuen Code erzeugen?");
         mail.Click += async (_, _) => await ActAsync("send_email", "Link und ein neuer Zugangscode werden per E-Mail an das Mitglied gesendet (der alte Code wird ungültig). Jetzt senden?");
+        reset.Click += async (_, _) => await ActAsync("reset_verification", "Die Bestätigung wird zurückgesetzt. Die Person muss ihre Daten danach erneut bestätigen. Fortfahren?");
         close.Click += (_, _) => Close();
         CancelButton = close;
 
@@ -54,7 +62,7 @@ public sealed class MemberLinkForm : Form
         _codeBox.Controls.Add(codeInner);
 
         var actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0, 16, 0, 0) };
-        actions.Controls.AddRange(new Control[] { mail, newCode, close });
+        actions.Controls.AddRange(new Control[] { mail, newCode, reset, close });
 
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, AutoScroll = true };
         layout.Controls.Add(_who);
@@ -75,7 +83,7 @@ public sealed class MemberLinkForm : Form
         layout.Controls.Add(_status);
         Controls.Add(layout);
 
-        _who.Text = member.FullName;
+        _who.Text = fullName;
         Shown += async (_, _) => await ActAsync("", "");
     }
 
@@ -84,8 +92,8 @@ public sealed class MemberLinkForm : Form
         _who.Text = $"{info.Name} ({info.Email})";
         _link.Text = info.Link;
         _verified.Text = info.VerifiedAt is { Length: > 0 } v && DateTime.TryParse(v, out var d)
-            ? $"Das Mitglied hat seine Daten am {d:dd.MM.yyyy HH:mm} Uhr bestätigt."
-            : "Das Mitglied hat seine Daten noch nicht bestätigt.";
+            ? $"Bestätigt: Die Daten wurden am {d:dd.MM.yyyy HH:mm} Uhr bestätigt."
+            : "Die Daten wurden noch nicht bestätigt.";
         if (!string.IsNullOrEmpty(info.Password))
         {
             _code.Text = info.Password;
@@ -104,7 +112,7 @@ public sealed class MemberLinkForm : Form
         try
         {
             UseWaitCursor = true;
-            Show(await _api.GetMemberLinkAsync(_memberId, action));
+            Show(await _api.GetLinkAsync(_entity, _memberId, action));
         }
         catch (Exception ex)
         {

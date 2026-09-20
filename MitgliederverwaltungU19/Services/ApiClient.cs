@@ -559,15 +559,43 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Post, "auth/password", new JsonObject { ["current_password"] = current, ["new_password"] = newPassword }, ct);
     }
 
-    /// <summary>Persönlicher Link eines Mitglieds. action: "", "regenerate_link", "regenerate_password" oder "send_email".</summary>
-    public async Task<LinkInfo> GetMemberLinkAsync(int memberId, string action = "", CancellationToken ct = default)
+    /// <summary>Persönlicher Link einer Person. entity: "members" oder "staff"; action: "", "regenerate_link", "regenerate_password", "send_email" oder "reset_verification".</summary>
+    public async Task<LinkInfo> GetLinkAsync(string entity, int id, string action = "", CancellationToken ct = default)
     {
         using var doc = action.Length == 0
-            ? await SendJsonAsync(HttpMethod.Get, $"members/{memberId}/link", null, ct)
-            : await SendJsonAsync(HttpMethod.Post, $"members/{memberId}/link", new JsonObject { ["action"] = action }, ct);
+            ? await SendJsonAsync(HttpMethod.Get, $"{entity}/{id}/link", null, ct)
+            : await SendJsonAsync(HttpMethod.Post, $"{entity}/{id}/link", new JsonObject { ["action"] = action }, ct);
         var r = doc.RootElement;
         string? Nullable(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
         return new LinkInfo(Str(r, "name"), Str(r, "email"), Str(r, "link"), Nullable("verified_at"), Nullable("password"), Str(r, "message"));
+    }
+
+    public Task<LinkInfo> GetMemberLinkAsync(int memberId, string action = "", CancellationToken ct = default) => GetLinkAsync("members", memberId, action, ct);
+
+    /// <summary>Setzt die Bestätigung der Personen zurück (entity: "members" oder "staff"). Liefert die Anzahl.</summary>
+    public async Task<int> ResetVerificationAsync(string entity, IEnumerable<int> ids, CancellationToken ct = default)
+    {
+        var arr = new JsonArray();
+        foreach (var id in ids) arr.Add(id);
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"{entity}/verification/reset", new JsonObject { ["ids"] = arr }, ct);
+        return doc.RootElement.TryGetProperty("reset", out var n) && n.TryGetInt32(out var count) ? count : 0;
+    }
+
+    /// <summary>Sendet Link und neuen Zugangscode per E-Mail (Massenmail; der Server erlaubt höchstens 10 pro Aufruf).</summary>
+    public async Task<List<SendLinkResult>> SendLinksAsync(string entity, IEnumerable<int> ids, CancellationToken ct = default)
+    {
+        var arr = new JsonArray();
+        foreach (var id in ids) arr.Add(id);
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"{entity}/send-links", new JsonObject { ["ids"] = arr }, ct);
+        var list = new List<SendLinkResult>();
+        if (doc.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var e in results.EnumerateArray())
+            {
+                list.Add(new SendLinkResult(e.TryGetProperty("id", out var i) && i.TryGetInt32(out var idv) ? idv : 0, Str(e, "name"), Str(e, "status"), Str(e, "message")));
+            }
+        }
+        return list;
     }
 
     /// <summary>Setzt oder entfernt die "Fehlt"-Markierung eines Pflichtdokuments (nada, pass, ecard, rechte).</summary>

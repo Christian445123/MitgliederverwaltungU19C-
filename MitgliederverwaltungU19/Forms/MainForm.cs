@@ -91,6 +91,9 @@ public sealed class MainForm : Form
         link.Enabled = _ping.CanWrite && _ping.Can("members.links");
         link.Click += (_, _) => { if (SelectedMember() is { } m) { using var form = new MemberLinkForm(_api, m); form.ShowDialog(this); } };
 
+        var verify = Theme.MakeButton("Bestätigung …");
+        verify.Enabled = _ping.CanWrite && _ping.Can("members.links");
+        verify.Click += async (_, _) => await VerifyAsync();
         add.Click += async (_, _) => await OpenEditorAsync(null);
         export.Click += async (_, _) => await ExportAsync();
         edit.Click += async (_, _) => { if (SelectedMember() is { } m) await OpenEditorAsync(m); };
@@ -255,9 +258,10 @@ public sealed class MainForm : Form
         var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
         edit.Margin = new Padding(0, 0, 8, 0);
         link.Margin = new Padding(0, 0, 8, 0);
+        verify.Margin = new Padding(0, 0, 8, 0);
         delete.Margin = new Padding(0, 0, 8, 0);
         deleteAll.Margin = new Padding(0, 0, 0, 0);
-        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, link, delete, deleteAll });
+        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, link, verify, delete, deleteAll });
 
         // Tabelle in einer Karte mit feinem Rahmen
         _grid.Dock = DockStyle.Fill;
@@ -499,6 +503,17 @@ public sealed class MainForm : Form
         using var form = new MissingDocsForm(MissingDocuments());
         form.ShowDialog(this);
     }
+    private static VerifyPerson ToVerifyPerson(Member m) =>
+        new(m.Id, m.FullName, m.Get("status") != "inaktiv", m.Get("email").Length > 0, m.ConfirmedAt is not null);
+
+    /// <summary>Bestätigung zurücksetzen und/oder Massenmail zur Datenprüfung (Auswahl oder alle Spieler).</summary>
+    private async Task VerifyAsync()
+    {
+        using var form = new VerificationForm(_api, "members", _all.Select(ToVerifyPerson).ToList(), SelectedMembers().Select(ToVerifyPerson).ToList());
+        form.ShowDialog(this);
+        if (form.Changed) await ReloadAsync();
+    }
+
     private List<Member> SelectedMembers() =>
         _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<Member>().ToList();
 
