@@ -67,6 +67,19 @@ internal sealed class StaffEditDialog : Form
             }
             _inputs[key] = input;
             table.Controls.Add(input);
+            if (key == "vorname")
+            {
+                // Automatisch gebildet: zuerst Nachname, dann Vorname (z. B. "Schubert Hans")
+                var auto = new TextBox { ReadOnly = true, Width = 300, TabStop = false, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8) };
+                var lastName = (TextBox)_inputs["nachname"];
+                var firstName = (TextBox)input;
+                void UpdateName() => auto.Text = $"{lastName.Text.Trim()} {firstName.Text.Trim()}".Trim();
+                lastName.TextChanged += (_, _) => UpdateName();
+                firstName.TextChanged += (_, _) => UpdateName();
+                UpdateName();
+                table.Controls.Add(new Label { Text = "Name & Vorname (automatisch)", AutoSize = true, MaximumSize = new Size(190, 0), Margin = new Padding(0, 8, 8, 0) });
+                table.Controls.Add(auto);
+            }
         }
 
         _status.Items.AddRange(new object[] { "aktiv", "inaktiv" });

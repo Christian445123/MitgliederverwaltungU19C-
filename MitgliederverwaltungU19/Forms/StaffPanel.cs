@@ -126,7 +126,7 @@ public sealed class StaffPanel : UserControl
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         foreach (var (key, label, weight) in new[]
                  {
-                     ("name", "Name", 18f), ("position", "Position", 9f), ("nada", "Nada", 6f),
+                     ("name", "Name & Vorname", 18f), ("position", "Position", 9f), ("nada", "Nada", 6f),
                      ("telefon", "Telefon", 12f), ("email", "E-Mail", 19f), ("reisepass_gueltig_bis", "Pass", 9f),
                      ("status", "Status", 7f), ("bestaetigt", "Bestätigt", 9f),
                  })
