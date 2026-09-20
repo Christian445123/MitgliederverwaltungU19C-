@@ -200,8 +200,10 @@ public static class UpdateService
     }
 
     /// <summary>
-    /// Startet die Installation und beendet danach die Anwendung. Ein kleines PowerShell-Skript wartet, bis die
-    /// Anwendung geschlossen ist, installiert die .msi still im Hintergrund (ohne Fenster; Windows fragt höchstens einmal nach Administratorrechten) und öffnet danach die neue Version.
+    /// Startet die Installation und beendet danach die Anwendung. Ein kleines PowerShell-Skript zeigt ein Fenster mit
+    /// Fortschrittsbalken („Update wird installiert …“), wartet bis die Anwendung geschlossen ist, installiert die .msi still im
+    /// Hintergrund (Windows fragt höchstens einmal nach Administratorrechten), meldet am Ende „Update abgeschlossen“
+    /// und startet das Programm automatisch neu.
     /// </summary>
     public static void InstallAndExit(string msiPath)
     {
@@ -213,21 +215,65 @@ public static class UpdateService
             : installedExe;
 
         static string Q(string s) => s.Replace("'", "''");
-        var script = string.Join("\r\n", new[]
-        {
-            "Start-Sleep -Seconds 3",
-            "try {",
-            $"  $p = Start-Process msiexec.exe -ArgumentList @('/i', '\"{Q(msiPath)}\"', '/qn', '/norestart', '/l*v', '\"{Q(Path.Combine(Path.GetDirectoryName(msiPath)!, "install.log"))}\"') -Verb RunAs -Wait -PassThru",
-            "} catch { }",
-            $"if (Test-Path -LiteralPath '{Q(relaunch)}') {{ Start-Process -FilePath '{Q(relaunch)}' }}",
-        });
+        var script = """
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            [System.Windows.Forms.Application]::EnableVisualStyles()
+            $form = New-Object System.Windows.Forms.Form
+            $form.Text = 'Mitgliederverwaltung U19 - Update'
+            $form.StartPosition = 'CenterScreen'
+            $form.FormBorderStyle = 'FixedDialog'
+            $form.ControlBox = $false
+            $form.TopMost = $true
+            $form.ClientSize = New-Object System.Drawing.Size(460, 130)
+            $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+            $label = New-Object System.Windows.Forms.Label
+            $label.Location = New-Object System.Drawing.Point(20, 18)
+            $label.Size = New-Object System.Drawing.Size(420, 44)
+            $label.Text = 'Update wird installiert ...'
+            $bar = New-Object System.Windows.Forms.ProgressBar
+            $bar.Location = New-Object System.Drawing.Point(20, 74)
+            $bar.Size = New-Object System.Drawing.Size(420, 22)
+            $bar.Style = 'Marquee'
+            $bar.MarqueeAnimationSpeed = 30
+            $form.Controls.Add($label)
+            $form.Controls.Add($bar)
+            $form.Show()
+            [System.Windows.Forms.Application]::DoEvents()
+            function Wait-Ui([int]$ms) {
+              $end = [DateTime]::Now.AddMilliseconds($ms)
+              while ([DateTime]::Now -lt $end) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 }
+            }
+            Wait-Ui 2500
+            $ok = $false
+            try {
+              $p = Start-Process msiexec.exe -ArgumentList @('/i', '"__MSI__"', '/qn', '/norestart', '/l*v', '"__LOG__"') -Verb RunAs -PassThru
+              while (-not $p.WaitForExit(100)) { [System.Windows.Forms.Application]::DoEvents() }
+              $ok = ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010)
+            } catch { }
+            $bar.Style = 'Continuous'
+            if ($ok) {
+              $bar.Value = 100
+              $label.Text = 'Update abgeschlossen. Das Programm wird neu gestartet ...'
+              Wait-Ui 2500
+            } else {
+              $bar.Value = 0
+              $label.Text = 'Das Update konnte nicht installiert werden. Die bisherige Version wird gestartet.'
+              Wait-Ui 4500
+            }
+            if (Test-Path -LiteralPath '__EXE__') { Start-Process -FilePath '__EXE__' -ArgumentList '--restart' }
+            $form.Close()
+            """
+            .Replace("__MSI__", msiPath.Replace("'", "''"))
+            .Replace("__LOG__", Path.Combine(Path.GetDirectoryName(msiPath)!, "install.log"))
+            .Replace("__EXE__", Q(relaunch));
         var scriptPath = Path.Combine(Path.GetDirectoryName(msiPath)!, "install-update.ps1");
         File.WriteAllText(scriptPath, script, new System.Text.UTF8Encoding(true));
 
         Process.Start(new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File \"{scriptPath}\"",
             UseShellExecute = false,
             CreateNoWindow = true,
         });

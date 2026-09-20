@@ -202,10 +202,10 @@ public sealed class MainForm : Form
         _updateButton.Margin = new Padding(18, 8, 0, 4);
         _updateButton.Click += (_, _) =>
         {
-            if (_updateMsi is not null && File.Exists(_updateMsi))
+            if (_update is not null)
             {
-                _footer.Text = "Update wird im Hintergrund installiert – die Anwendung startet gleich neu …";
-                UpdateService.InstallAndExit(_updateMsi);
+                using var progressForm = new UpdateProgressForm(_update, _settings.GitHubToken, _updateMsi);
+                progressForm.ShowDialog(this);
                 return;
             }
             using var form = new UpdateForm(_settings, _update);
