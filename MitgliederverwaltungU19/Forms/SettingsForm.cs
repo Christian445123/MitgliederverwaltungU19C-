@@ -61,6 +61,26 @@ public sealed class SettingsForm : Form
         layout.Controls.Add(_token);
         layout.Controls.Add(buttons);
         layout.Controls.Add(_status);
+
+        // Programm-Updates (nicht bei der Ersteinrichtung)
+        if (!firstRun)
+        {
+            var updates = Theme.MakeButton("Updates suchen / einspielen …");
+            updates.Click += (_, _) =>
+            {
+                using var form = new UpdateForm(_settings);
+                form.ShowDialog(this);
+            };
+            layout.Controls.Add(new Label
+            {
+                Text = $"Programm-Updates (installierte Version {UpdateService.CurrentVersion})",
+                AutoSize = true,
+                Font = Theme.Bold,
+                Margin = new Padding(0, 22, 0, 4),
+            });
+            layout.Controls.Add(updates);
+            ClientSize = new Size(480, 440);
+        }
         Controls.Add(layout);
     }
 

@@ -24,6 +24,8 @@ public sealed class MainForm : Form
     private readonly Button _showExpiry = Theme.MakeButton("Ablauf anzeigen");
     private readonly Button _showMissing = Theme.MakeButton("Fehlende Dokumente");
     private bool _expiryAnnounced;
+    private readonly Button _updateButton = Theme.MakeButton("", primary: true);
+    private UpdateInfo? _update;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
     {
@@ -40,7 +42,11 @@ public sealed class MainForm : Form
         MinimumSize = new Size(900, 500);
 
         BuildLayout();
-        Shown += async (_, _) => await ReloadAsync();
+        Shown += async (_, _) =>
+        {
+            await ReloadAsync();
+            await CheckForUpdateAsync();
+        };
         FormClosed += (_, _) => _api.Dispose();
     }
 
@@ -128,7 +134,13 @@ public sealed class MainForm : Form
         deploy.Enabled = _ping.CanWrite;
         _writeButtons.AddRange(new[] { add, edit, delete, import });
 
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, roster, staff, deleteAll, deploy, settings });
+        _updateButton.Visible = false;
+        _updateButton.Click += (_, _) =>
+        {
+            using var form = new UpdateForm(_settings, _update);
+            form.ShowDialog(this);
+        };
+        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, roster, staff, deleteAll, deploy, settings, _updateButton });
         if (!_ping.CanWrite)
         {
             foreach (var b in _writeButtons) b.Enabled = false;
@@ -477,6 +489,25 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Theme.ShowError(this, ex);
+        }
+    }
+
+    /// <summary>Sucht beim Start still im Hintergrund nach einer neuen Version und blendet bei Erfolg einen Button ein.</summary>
+    private async Task CheckForUpdateAsync()
+    {
+        if (!_settings.AutoCheckUpdates || string.IsNullOrWhiteSpace(_settings.GitHubRepo)) return;
+        try
+        {
+            var info = await UpdateService.CheckAsync(_settings.GitHubRepo, _settings.GitHubToken);
+            if (info is null) return;
+            _update = info;
+            _updateButton.Text = $"⬆ Update {info.Version} verfügbar";
+            _updateButton.Visible = true;
+            _footer.Text = $"Neue Version {info.Version} verfügbar – Button „Update“ in der Werkzeugleiste oder Einstellungen › Updates.";
+        }
+        catch (Exception)
+        {
+            // Keine Internetverbindung o. Ä.: beim Start nicht stören
         }
     }
 

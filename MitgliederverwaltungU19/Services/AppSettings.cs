@@ -38,6 +38,38 @@ public sealed class AppSettings
             : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
     }
 
+    // ── Programm-Updates (GitHub Releases) ─────────────────────────────────
+
+    /// <summary>GitHub-Repository der Anwendung im Format "Besitzer/Repository".</summary>
+    public string GitHubRepo { get; set; } = "Christian445123/MitgliederverwaltungU19C-";
+
+    /// <summary>Beim Start automatisch nach einer neuen Version suchen.</summary>
+    public bool AutoCheckUpdates { get; set; } = true;
+
+    public string GitHubTokenProtected { get; set; } = "";
+
+    /// <summary>Nur bei privatem Repository nötig (Lesezugriff auf Releases). Wird per DPAPI geschützt gespeichert.</summary>
+    [JsonIgnore]
+    public string GitHubToken
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(GitHubTokenProtected)) return "";
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(GitHubTokenProtected), null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch (Exception)
+            {
+                return "";
+            }
+        }
+        set => GitHubTokenProtected = string.IsNullOrEmpty(value)
+            ? ""
+            : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
+    }
+
     [JsonIgnore]
     public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl) && !string.IsNullOrEmpty(Token);
 

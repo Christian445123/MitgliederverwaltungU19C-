@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Installer (MSI) für die Mitgliederverwaltung U19.
+  Gebaut mit WiX Toolset 5 über installer\build-installer.ps1 (Version wird dort übergeben).
+  Die Einstellungen der Benutzer (%APPDATA%\MitgliederverwaltungU19) bleiben bei Update und Deinstallation erhalten.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Mitgliederverwaltung U19"
+           Manufacturer="AFBÖ U19"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="C6D4BBFF-79B4-4DBF-AEE5-DEE177913565"
+           Language="1031"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Mitgliederverwaltung U19 - Desktop-Anwendung" />
+
+    <!-- Neuere Version ersetzt die alte automatisch (Update ohne vorheriges Deinstallieren) -->
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version der Mitgliederverwaltung U19 ist bereits installiert." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon.ico" SourceFile="..\app.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPCOMMENTS" Value="Mitgliederverwaltung der AFBÖ U19 (Desktop-Anwendung für die Web-Verwaltung)" />
+
+    <!-- Fenster: Willkommen -> Zielordner -> Installieren -> Fertig (ohne Lizenzseite) -->
+    <!-- Nach der Installation optional gleich starten -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Mitgliederverwaltung U19 jetzt starten" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="LaunchApp" FileRef="AppExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <UI>
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2" Condition="NOT Installed" />
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2" Condition="NOT Installed" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApp"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Mitgliederverwaltung U19" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppStartMenuFolder" Name="Mitgliederverwaltung U19" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="Main" Title="Mitgliederverwaltung U19" Level="1" ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Component Id="AppExeComponent" Guid="*">
+        <File Id="AppExe" Source="publish\MitgliederverwaltungU19.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Shortcuts">
+      <Component Id="StartMenuShortcutComponent" Directory="AppStartMenuFolder" Guid="*">
+        <Shortcut Id="StartMenuShortcut" Name="Mitgliederverwaltung U19" Description="Mitgliederverwaltung U19 starten"
+                  Target="[INSTALLFOLDER]MitgliederverwaltungU19.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+        <RemoveFolder Id="RemoveStartMenuFolder" Directory="AppStartMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\AFBOE U19\Mitgliederverwaltung" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Guid="*">
+        <Shortcut Id="DesktopShortcut" Name="Mitgliederverwaltung U19" Description="Mitgliederverwaltung U19 starten"
+                  Target="[INSTALLFOLDER]MitgliederverwaltungU19.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+        <RegistryValue Root="HKCU" Key="Software\AFBOE U19\Mitgliederverwaltung" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>

@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Installer-Bauordner (die fertige .msi gehoert in ein GitHub-Release, nicht ins Repository)
+MitgliederverwaltungU19/installer/publish/
+MitgliederverwaltungU19/installer/output/
