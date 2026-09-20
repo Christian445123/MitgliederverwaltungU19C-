@@ -119,7 +119,10 @@ public sealed class FieldPermissionsForm : Form
             if (f.AdminOnly)
             {
                 // Nur im Admin-Formular vorhanden: für Spieler nicht steuerbar
-                row.Cells[2] = new DataGridViewTextBoxCell { Value = "immer ausgeblendet", ReadOnly = true, Style = { ForeColor = Theme.Muted } };
+                // (ReadOnly und Format erst setzen, wenn die Zelle in der Zeile eingefügt ist)
+                row.Cells[2] = new DataGridViewTextBoxCell { Value = "immer ausgeblendet" };
+                row.Cells[2].ReadOnly = true;
+                row.Cells[2].Style.ForeColor = Theme.Muted;
             }
             if (f.Core)
             {
