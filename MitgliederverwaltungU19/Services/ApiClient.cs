@@ -583,6 +583,13 @@ public sealed class ApiClient : IDisposable
 
     public Task<LinkInfo> GetMemberLinkAsync(int memberId, string action = "", CancellationToken ct = default) => GetLinkAsync("members", memberId, action, ct);
 
+    /// <summary>Auskunft (Art. 15/20 DSGVO): alle gespeicherten Daten einer Person als formatiertes JSON (Recht „Datenschutz verwalten“).</summary>
+    public async Task<string> GetDsgvoExportAsync(string entity, int id, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, $"{entity}/{id}/dsgvo", null, ct);
+        return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+    }
+
     /// <summary>Setzt die Bestätigung der Personen zurück (entity: "members" oder "staff"). Liefert die Anzahl.</summary>
     public async Task<int> ResetVerificationAsync(string entity, IEnumerable<int> ids, CancellationToken ct = default)
     {

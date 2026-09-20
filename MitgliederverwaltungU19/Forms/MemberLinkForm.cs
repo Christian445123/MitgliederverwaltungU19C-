@@ -42,6 +42,8 @@ public sealed class MemberLinkForm : Form
         var newCode = Theme.MakeButton("Neuen Zugangscode erzeugen");
         var mail = Theme.MakeButton("Per E-Mail senden", primary: true);
         var reset = Theme.MakeButton("Bestätigung zurücksetzen");
+        var export = Theme.MakeButton("Auskunft (Datei) …");
+        export.Click += async (_, _) => await ExportAsync();
         var close = Theme.MakeButton("Schließen");
         newLink.Click += async (_, _) => await ActAsync("regenerate_link", "Der bisherige Link wird ungültig. Neuen Link erzeugen?");
         newCode.Click += async (_, _) => await ActAsync("regenerate_password", "Der bisherige Zugangscode wird ungültig. Neuen Code erzeugen?");
@@ -62,7 +64,7 @@ public sealed class MemberLinkForm : Form
         _codeBox.Controls.Add(codeInner);
 
         var actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0, 16, 0, 0) };
-        actions.Controls.AddRange(new Control[] { mail, newCode, reset, close });
+        actions.Controls.AddRange(new Control[] { mail, newCode, reset, export, close });
 
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, AutoScroll = true };
         layout.Controls.Add(_who);
@@ -103,6 +105,29 @@ public sealed class MemberLinkForm : Form
         {
             _status.ForeColor = Theme.Green;
             _status.Text = info.Message;
+        }
+    }
+
+    /// <summary>Auskunft über alle gespeicherten Daten der Person (Art. 15 DSGVO) als JSON-Datei speichern.</summary>
+    private async Task ExportAsync()
+    {
+        using var dialog = new SaveFileDialog { Filter = "JSON|*.json", FileName = $"auskunft-{_entity}-{_memberId}.json" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            UseWaitCursor = true;
+            await File.WriteAllTextAsync(dialog.FileName, await _api.GetDsgvoExportAsync(_entity, _memberId), System.Text.Encoding.UTF8);
+            _status.ForeColor = Theme.Green;
+            _status.Text = "Auskunft gespeichert. Bitte vertraulich behandeln und nach Versand löschen.";
+        }
+        catch (Exception ex)
+        {
+            _status.ForeColor = Theme.Danger;
+            _status.Text = ex.Message;
+        }
+        finally
+        {
+            UseWaitCursor = false;
         }
     }
 
