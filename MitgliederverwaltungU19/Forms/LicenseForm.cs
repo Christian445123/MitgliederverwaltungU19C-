@@ -25,7 +25,7 @@ public sealed class LicenseForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        ClientSize = new Size(500, 330);
+        ClientSize = new Size(500, 440);
 
         _quit = Theme.MakeButton(mustActivate ? "Anwendung beenden" : "Abbrechen");
         _quit.Click += (_, _) => DialogResult = DialogResult.Cancel;
@@ -49,6 +49,16 @@ public sealed class LicenseForm : Form
         layout.Controls.Add(intro);
         layout.Controls.Add(new Label { Text = "Lizenzschlüssel", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 16, 0, 2) });
         layout.Controls.Add(_key);
+        layout.Controls.Add(new Label { Text = "Offline-Lizenz (automatisch eingetragen)", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 14, 0, 2) });
+        layout.Controls.Add(new TextBox { Dock = DockStyle.Top, ReadOnly = true, Text = LicenseService.OfflineLicenseKey, BackColor = Color.FromArgb(0xF3, 0xF4, 0xF8) });
+        layout.Controls.Add(new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(460, 0),
+            ForeColor = Theme.Muted,
+            Margin = new Padding(0, 4, 0, 0),
+            Text = "Ist der Server nicht erreichbar, gilt sie automatisch, aber höchstens 3 Tage. Danach ist wieder eine Verbindung nötig.",
+        });
         layout.Controls.Add(buttons);
         layout.Controls.Add(_status);
         layout.Controls.Add(new Label
@@ -89,7 +99,8 @@ public sealed class LicenseForm : Form
         {
             _settings.LicenseKey = entered;
             var result = await LicenseService.CheckAsync(_settings, _api);
-            if (result.Status == LicenseStatus.Valid)
+            // Ohne Serververbindung greift die eingebaute Offline-Lizenz (3 Tage); der Schlüssel muss dann wenigstens das richtige Format haben
+            if (result.Status == LicenseStatus.Valid || (result.Status == LicenseStatus.OfflineGrace && LicenseService.LooksLikeKey(entered)))
             {
                 _settings.Save();
                 DialogResult = DialogResult.OK;

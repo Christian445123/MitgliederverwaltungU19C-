@@ -85,6 +85,12 @@ public static class LicenseService
 {
     private const int ClockToleranceSeconds = 600;
 
+    /// <summary>Fest eingebaute Offline-Lizenz: bei allen Installationen gleich, wird automatisch eingetragen.</summary>
+    public const string OfflineLicenseKey = "U19-OFFLINE-72H";
+
+    /// <summary>Höchstdauer der Offline-Lizenz: 3 Tage.</summary>
+    public const int OfflineLicenseSeconds = 3 * 24 * 3600;
+
     private static string? _machineId;
 
     /// <summary>Stabile Kennung dieses Rechners (SHA-256 der Windows-MachineGuid).</summary>
@@ -114,6 +120,10 @@ public static class LicenseService
 
     public static string KeyHash(string key) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizeKey(key)))).ToLowerInvariant();
+
+    /// <summary>Hat der Text das Format eines Lizenzschlüssels (U19-XXXX-XXXX-XXXX-XXXX)?</summary>
+    public static bool LooksLikeKey(string key) =>
+        System.Text.RegularExpressions.Regex.IsMatch(NormalizeKey(key), @"^U19-[A-HJ-NP-Z2-9]{4}(-[A-HJ-NP-Z2-9]{4}){3}$");
 
     /// <summary>Schlüssel gekürzt anzeigen: U19-ABCD-****-****-WXYZ.</summary>
     public static string MaskKey(string key)
@@ -184,6 +194,7 @@ public static class LicenseService
 
         s.LicensePublicKey = response.PublicKey;
         s.LicenseLease = response.Lease;
+        s.LicenseOfflineSince = 0; // Verbindung steht wieder: Offline-Lizenz beginnt bei Bedarf neu
         s.LicenseName = response.Name;
         s.LicenseLastSeen = Math.Max(Math.Max(s.LicenseLastSeen, Now()), response.ServerTime);
         s.Save();
@@ -198,9 +209,33 @@ public static class LicenseService
             $"Keine Verbindung zum Lizenzserver ({reason}).\n{why}"));
 
         var lease = s.LicenseLease;
-        if (lease is null || string.IsNullOrEmpty(s.LicensePublicKey))
+        if (lease is null)
         {
-            return expired("Es liegt keine Offline-Freigabe vor. Bitte mit dem Server verbinden.");
+            // Noch nie vom Server bestätigt: die fest eingebaute Offline-Lizenz gilt automatisch, höchstens 3 Tage
+            // ab dem ersten Verbindungsabbruch (wird nur durch eine erfolgreiche Serverprüfung zurückgesetzt).
+            var current = Now();
+            if (s.LicenseOfflineSince <= 0 || s.LicenseOfflineSince > current + ClockToleranceSeconds)
+            {
+                s.LicenseOfflineSince = current;
+            }
+            if (current < s.LicenseLastSeen - ClockToleranceSeconds)
+            {
+                return expired("Die Systemuhr wurde zurückgestellt. Bitte die Uhrzeit korrigieren und mit dem Server verbinden.");
+            }
+            var offlineUntil = s.LicenseOfflineSince + OfflineLicenseSeconds;
+            if (current > offlineUntil)
+            {
+                s.Save();
+                return expired("Die Offline-Lizenz (höchstens 3 Tage) ist abgelaufen. Bitte mit dem Server verbinden.");
+            }
+            s.LicenseLastSeen = Math.Max(s.LicenseLastSeen, current);
+            s.Save();
+            var untilOffline = DateTimeOffset.FromUnixTimeSeconds(offlineUntil);
+            return new LicenseCheck(LicenseStatus.OfflineGrace, $"Offline-Lizenz bis {untilOffline.ToLocalTime():dd.MM.yyyy HH:mm}.", untilOffline);
+        }
+        if (string.IsNullOrEmpty(s.LicensePublicKey))
+        {
+            return expired("Die gespeicherte Offline-Freigabe ist unvollständig. Bitte mit dem Server verbinden.");
         }
         if (!VerifySignature(lease, s.LicensePublicKey) || lease.KeyHash != KeyHash(key) || lease.MachineId != MachineId)
         {

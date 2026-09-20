@@ -27,7 +27,14 @@ public sealed class MainForm : Form
     private readonly Button _updateButton = Theme.MakeButton("", primary: true);
     private UpdateInfo? _update;
     private readonly System.Windows.Forms.Timer _licenseTimer = new() { Interval = 10 * 60 * 1000 };
-    private readonly Label _licenseLabel = new() { Dock = DockStyle.Right, Width = 430, TextAlign = ContentAlignment.MiddleRight, ForeColor = Theme.Muted };
+    private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(186, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 6, 0, 0) };
+    private readonly StatCard _cardTotal = new("Mitglieder gesamt", Theme.Navy);
+    private readonly StatCard _cardKader = new("Im Kader", Theme.Accent);
+    private readonly StatCard _cardConfirmed = new("Daten bestätigt", Color.FromArgb(0x10, 0xB9, 0x81));
+    private readonly StatCard _cardExpiry = new("Ablauf NADA / Pass", Color.FromArgb(0xEA, 0xB3, 0x08), clickable: true);
+    private readonly StatCard _cardMissing = new("Fehlende Dokumente", Theme.Danger, clickable: true);
+    private SideNavButton? _navExpiry;
+    private SideNavButton? _navMissing;
     private bool _licenseBusy;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
@@ -41,8 +48,8 @@ public sealed class MainForm : Form
         Icon = Theme.AppIcon;
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(1180, 720);
-        MinimumSize = new Size(900, 500);
+        Size = new Size(1360, 800);
+        MinimumSize = new Size(1080, 600);
 
         BuildLayout();
         Shown += async (_, _) =>
@@ -58,72 +65,102 @@ public sealed class MainForm : Form
 
     private void BuildLayout()
     {
-        // Kopfleiste
-        var header = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = Theme.Navy };
-        var brand = new Label
-        {
-            Text = "U19  Mitgliederverwaltung",
-            ForeColor = Color.White,
-            Font = Theme.Title,
-            AutoSize = true,
-            Location = new Point(18, 12),
-        };
-        var user = new Label
-        {
-            Text = $"{_ping.TokenName} · {(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}",
-            ForeColor = Color.FromArgb(0xC7, 0xCB, 0xE0),
-            AutoSize = true,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-        };
-        header.Controls.Add(brand);
-        header.Controls.Add(user);
-        header.Resize += (_, _) => user.Location = new Point(header.Width - user.Width - 18, 19);
-        user.Location = new Point(header.Width - user.Width - 18, 19);
+        BackColor = Theme.Background;
 
-        // Werkzeugleiste
-        var tools = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 92,
-            Padding = new Padding(14, 10, 14, 0),
-            BackColor = Color.White,
-            WrapContents = true,
-        };
+        // ── Filter und Aktionen ───────────────────────────────────────────
         _statusFilter.Items.AddRange(new object[] { "Alle", "Aktiv", "Inaktiv" });
         _statusFilter.SelectedIndex = 0;
         _statusFilter.SelectedIndexChanged += (_, _) => ApplyFilter();
         _kaderFilter.Items.AddRange(new object[] { "Alle Spieler", "Im Kader", "Spieler nicht im Kader" });
         _kaderFilter.SelectedIndex = 0;
         _kaderFilter.SelectedIndexChanged += (_, _) => ApplyFilter();
-        _kaderFilter.Margin = new Padding(0, 2, 8, 0);
         _search.TextChanged += (_, _) => ApplyFilter();
-        _search.Margin = new Padding(0, 2, 8, 0);
-        _statusFilter.Margin = new Padding(0, 2, 16, 0);
+        _search.Width = 300;
+        _search.PlaceholderText = "Suche: Name, E-Mail, Verein, Jersey Nr.";
+        _search.Margin = new Padding(0, 4, 10, 0);
+        _statusFilter.Margin = new Padding(0, 4, 10, 0);
+        _kaderFilter.Margin = new Padding(0, 4, 18, 0);
 
-        var refresh = Theme.MakeButton("Aktualisieren");
         var add = Theme.MakeButton("+ Neues Mitglied", primary: true);
+        var export = Theme.MakeButton("Export CSV");
         var edit = Theme.MakeButton("Bearbeiten");
         var delete = Theme.MakeButton("Auswahl löschen");
         var deleteAll = Theme.MakeButton("Alle löschen …");
         deleteAll.ForeColor = Theme.Danger;
-        var import = Theme.MakeButton("Import …");
-        var export = Theme.MakeButton("Export CSV");
-        var roster = Theme.MakeButton("Roster …");
-        var staff = Theme.MakeButton("Staff …");
-        var settings = Theme.MakeButton("Einstellungen");
-        var deploy = Theme.MakeButton("Änderungen einspielen");
+        deleteAll.Enabled = _ping.CanWrite;
 
-        refresh.Click += async (_, _) => await ReloadAsync();
         add.Click += async (_, _) => await OpenEditorAsync(null);
+        export.Click += async (_, _) => await ExportAsync();
         edit.Click += async (_, _) => { if (SelectedMember() is { } m) await OpenEditorAsync(m); };
         delete.Click += async (_, _) => await DeleteSelectedAsync();
         deleteAll.Click += async (_, _) => await DeleteAllAsync();
-        deleteAll.Enabled = _ping.CanWrite;
-        import.Click += async (_, _) => await OpenImportAsync();
-        export.Click += async (_, _) => await ExportAsync();
-        roster.Click += (_, _) => { using var form = new RosterForm(_api); form.ShowDialog(this); };
-        staff.Click += (_, _) => { using var form = new StaffForm(_api, _ping.CanWrite); form.ShowDialog(this); };
-        settings.Click += (_, _) => OpenSettings();
+        _writeButtons.AddRange(new[] { add, edit, delete });
+
+        // ── Seitenleiste ──────────────────────────────────────────────────
+        var sidebar = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Theme.Navy };
+
+        var brand = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Theme.Navy };
+        var mark = new Label
+        {
+            Text = "U19",
+            Font = new Font(Theme.Bold.FontFamily, 12f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(0x1A, 0x0D, 0x00),
+            BackColor = Theme.Accent,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Size = new Size(46, 46),
+            Location = new Point(20, 20),
+        };
+        var brandText = new Label
+        {
+            Text = "AFBÖ\nMitgliederverwaltung",
+            Font = Theme.Bold,
+            ForeColor = Color.White,
+            AutoSize = true,
+            Location = new Point(76, 24),
+        };
+        brand.Controls.AddRange(new Control[] { mark, brandText });
+
+        var nav = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(0, 6, 0, 0),
+            BackColor = Theme.Navy,
+        };
+
+        SideNavButton Nav(string text, string glyph, Action click, bool active = false)
+        {
+            var b = new SideNavButton(text, glyph) { Width = 224, Active = active };
+            b.Click += (_, _) => click();
+            nav.Controls.Add(b);
+            return b;
+        }
+
+        Nav("Mitglieder", "", () => _grid.Focus(), active: true);
+        Nav("Staff", "", () => { using var form = new StaffForm(_api, _ping.CanWrite); form.ShowDialog(this); });
+        var import = Nav("Import …", "", async () => await OpenImportAsync());
+        import.Enabled = _ping.CanWrite;
+        Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); });
+        _navExpiry = Nav("Ablaufdaten", "", ShowExpiry);
+        _navMissing = Nav("Dokumente fehlen", "", ShowMissing);
+        Nav("Aktualisieren", "", async () => await ReloadAsync());
+
+        // Unterer Bereich der Seitenleiste
+        var bottom = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(0, 6, 0, 10),
+            BackColor = Theme.Navy,
+        };
+        var sep = new Panel { Height = 1, Width = 184, BackColor = Color.FromArgb(0x26, 0x2C, 0x4D), Margin = new Padding(20, 0, 20, 6) };
+        bottom.Controls.Add(sep);
+
+        var deploy = new SideNavButton("Änderungen einspielen", "") { Width = 236, Enabled = _ping.CanWrite };
         deploy.Click += (_, _) =>
         {
             // Nicht-modal: Das Fenster darf für die Automatik geöffnet bleiben, während die App weiter benutzt wird
@@ -137,22 +174,80 @@ public sealed class MainForm : Form
                 _deployForm.Activate();
             }
         };
-        deploy.Enabled = _ping.CanWrite;
-        _writeButtons.AddRange(new[] { add, edit, delete, import });
+        var settingsButton = new SideNavButton("Einstellungen", "") { Width = 236 };
+        settingsButton.Click += (_, _) => OpenSettings();
+        bottom.Controls.Add(deploy);
+        bottom.Controls.Add(settingsButton);
 
         _updateButton.Visible = false;
+        _updateButton.AutoSize = false;
+        _updateButton.Size = new Size(190, 38);
+        _updateButton.Margin = new Padding(18, 8, 0, 4);
         _updateButton.Click += (_, _) =>
         {
             using var form = new UpdateForm(_settings, _update);
             form.ShowDialog(this);
         };
-        tools.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, refresh, add, edit, delete, import, export, roster, staff, deleteAll, deploy, settings, _updateButton });
-        if (!_ping.CanWrite)
-        {
-            foreach (var b in _writeButtons) b.Enabled = false;
-        }
+        bottom.Controls.Add(_updateButton);
 
-        // Tabelle
+        var account = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(186, 0),
+            ForeColor = Theme.SidebarText,
+            Margin = new Padding(20, 6, 0, 0),
+            UseMnemonic = false,
+            Text = $"{_ping.TokenName}\n{(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}",
+        };
+        bottom.Controls.Add(account);
+        bottom.Controls.Add(_licenseLabel);
+
+        // Reihenfolge: Fill zuerst, dann Bottom, dann Top
+        sidebar.Controls.Add(nav);
+        sidebar.Controls.Add(bottom);
+        sidebar.Controls.Add(brand);
+
+        // ── Inhalt ────────────────────────────────────────────────────────
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background, Padding = new Padding(26, 18, 26, 8) };
+
+        // Titelzeile
+        var titleRow = new Panel { Dock = DockStyle.Top, Height = 54 };
+        var title = new Label
+        {
+            Text = "Mitglieder",
+            Font = new Font(Theme.Title.FontFamily, 20f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(0x17, 0x19, 0x23),
+            AutoSize = true,
+            Location = new Point(0, 4),
+        };
+        var titleActions = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
+        add.Margin = new Padding(0, 0, 0, 0);
+        export.Margin = new Padding(0, 0, 10, 0);
+        titleActions.Controls.Add(add);
+        titleActions.Controls.Add(export);
+        titleRow.Controls.Add(title);
+        titleRow.Controls.Add(titleActions);
+
+        // Kennzahlen
+        var cards = new TableLayoutPanel { Dock = DockStyle.Top, Height = 100, ColumnCount = 5, RowCount = 1, Padding = new Padding(0, 6, 0, 10) };
+        for (var i = 0; i < 5; i++) cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        _cardMissing.Margin = new Padding(0);
+        foreach (var card in new[] { _cardTotal, _cardKader, _cardConfirmed, _cardExpiry, _cardMissing })
+        {
+            card.Dock = DockStyle.Fill;
+            cards.Controls.Add(card);
+        }
+        _cardExpiry.Click += (_, _) => ShowExpiry();
+        _cardMissing.Click += (_, _) => ShowMissing();
+
+        // Filterzeile und Aktionen
+        var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
+        edit.Margin = new Padding(0, 0, 8, 0);
+        delete.Margin = new Padding(0, 0, 8, 0);
+        deleteAll.Margin = new Padding(0, 0, 0, 0);
+        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, delete, deleteAll });
+
+        // Tabelle in einer Karte mit feinem Rahmen
         _grid.Dock = DockStyle.Fill;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
@@ -164,17 +259,17 @@ public sealed class MainForm : Form
         Theme.StyleGrid(_grid);
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-        AddColumn("name", "Name & Vorname", 22);
-        AddColumn("verein", "Verein", 18);
-        AddColumn("position", "Position", 12);
-        AddColumn("jersey", "Jersey", 7);
-        AddColumn("email", "E-Mail", 24);
-        AddColumn("telefon", "Telefon", 14);
-        AddColumn("status", "Status", 8);
-        AddColumn("kader", "Kader", 11);
+        AddColumn("name", "Name", 16);
+        AddColumn("verein", "Verein", 13);
+        AddColumn("position", "Position", 7);
+        AddColumn("jersey", "Nr.", 4);
+        AddColumn("email", "E-Mail", 19);
+        AddColumn("telefon", "Telefon", 12);
+        AddColumn("status", "Status", 7);
+        AddColumn("kader", "Kader", 10);
         AddColumn("bestaetigt", "Bestätigt", 9);
-        AddColumn("nada", "NADA gültig bis", 10);
-        AddColumn("pass", "Pass gültig bis", 10);
+        AddColumn("nada", "NADA", 9);
+        AddColumn("pass", "Pass", 9);
         _grid.CellDoubleClick += async (_, e) =>
         {
             if (e.RowIndex >= 0 && SelectedMember() is { } m) await OpenEditorAsync(m);
@@ -184,28 +279,22 @@ public sealed class MainForm : Form
             if (e.KeyCode == Keys.Enter) { e.Handled = true; if (SelectedMember() is { } m) await OpenEditorAsync(m); }
         };
 
-        _showExpiry.Dock = DockStyle.Right;
-        _showExpiry.Margin = new Padding(0);
-        _showExpiry.Click += (_, _) => ShowExpiry();
-        _showMissing.Dock = DockStyle.Right;
-        _showMissing.Margin = new Padding(0);
-        _showMissing.Click += (_, _) => ShowMissing();
-        _banner.Controls.Add(_showExpiry);
-        _banner.Controls.Add(_showMissing);
-        _banner.Controls.Add(_bannerText);
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 30, Padding = new Padding(14, 0, 14, 0), BackColor = Color.White };
-        footer.Controls.Add(_licenseLabel);
+        var gridCard = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Border, Padding = new Padding(1) };
+        gridCard.Controls.Add(_grid);
+
+        var footer = new Panel { Dock = DockStyle.Bottom, Height = 30, BackColor = Theme.Background };
+        _footer.Dock = DockStyle.Fill;
         footer.Controls.Add(_footer);
-        tools.Controls.Add(_stats);
 
-        var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(14, 12, 14, 8) };
-        body.Controls.Add(_grid);
+        // Reihenfolge: Fill zuerst, dann Bottom, dann Top (zuletzt hinzugefügt = ganz oben)
+        content.Controls.Add(gridCard);
+        content.Controls.Add(footer);
+        content.Controls.Add(filterRow);
+        content.Controls.Add(cards);
+        content.Controls.Add(titleRow);
 
-        Controls.Add(body);
-        Controls.Add(footer);
-        Controls.Add(_banner);
-        Controls.Add(tools);
-        Controls.Add(header);
+        Controls.Add(content);
+        Controls.Add(sidebar);
     }
 
     private void AddColumn(string name, string title, float weight)
@@ -216,6 +305,8 @@ public sealed class MainForm : Form
             HeaderText = title,
             FillWeight = weight,
             SortMode = DataGridViewColumnSortMode.Automatic,
+            ToolTipText = name == "nada" ? "NADA-Zertifikat gültig bis" : name == "pass" ? "Reisepass gültig bis" : "",
+            MinimumWidth = name is "nada" or "pass" ? 98 : name is "jersey" ? 48 : name is "bestaetigt" ? 96 : 70,
         });
     }
 
@@ -280,7 +371,10 @@ public sealed class MainForm : Form
 
         var active = _all.Count(m => m.Get("status") != "inaktiv");
         var confirmed = _all.Count(m => m.ConfirmedAt is not null);
-        _stats.Text = $"{_all.Count} Mitglieder · {active} aktiv · {confirmed} bestätigt";
+        var inKader = _all.Count(m => m.Get("kader") != "nicht_im_kader");
+        _cardTotal.Set(_all.Count.ToString(), $"Mitglieder · {active} aktiv");
+        _cardKader.Set(inKader.ToString(), $"Im Kader · {_all.Count - inKader} nicht");
+        _cardConfirmed.Set(confirmed.ToString(), $"Bestätigt · {_all.Count - confirmed} offen");
         _footer.Text = $"{filtered.Count} von {_all.Count} angezeigt · Doppelklick zum Bearbeiten";
     }
 
@@ -322,6 +416,16 @@ public sealed class MainForm : Form
         var missing = MissingDocuments();
         _showMissing.Visible = missing.Count > 0;
         _showExpiry.Visible = items.Count > 0;
+
+        // Kennzahlen und Zähler in der Seitenleiste
+        var expiredCount = items.Count(i => i.State == ExpiryState.Expired);
+        var okGreen = Color.FromArgb(0x10, 0xB9, 0x81);
+        var warnYellow = Color.FromArgb(0xEA, 0xB3, 0x08);
+        _cardExpiry.Set(items.Count.ToString(), expiredCount > 0 ? $"NADA/Pass · {expiredCount} abgelaufen" : "Ablauf NADA / Pass",
+            expiredCount > 0 ? Theme.Danger : items.Count > 0 ? warnYellow : okGreen);
+        _cardMissing.Set(missing.Count.ToString(), "Spieler ohne Dokumente", missing.Count > 0 ? Theme.Danger : okGreen);
+        if (_navExpiry is not null) { _navExpiry.Badge = items.Count; _navExpiry.Invalidate(); }
+        if (_navMissing is not null) { _navMissing.Badge = missing.Count; _navMissing.Invalidate(); }
         if (items.Count == 0 && missing.Count == 0)
         {
             _banner.Visible = false;
@@ -514,22 +618,22 @@ public sealed class MainForm : Form
             {
                 case LicenseStatus.Valid:
                     _licenseLabel.Text = "🔑 Lizenz aktiv" + (string.IsNullOrEmpty(_settings.LicenseName) ? "" : " – " + _settings.LicenseName);
-                    _licenseLabel.ForeColor = Theme.Green;
+                    _licenseLabel.ForeColor = Theme.GreenLight;
                     break;
                 case LicenseStatus.OfflineGrace:
                     _licenseLabel.Text = "⚠ Lizenzserver offline – " + result.Message;
-                    _licenseLabel.ForeColor = Theme.AccentDark;
+                    _licenseLabel.ForeColor = Theme.AccentLight;
                     break;
                 default:
                     _licenseTimer.Stop();
                     _licenseLabel.Text = "Lizenz nicht gültig";
-                    _licenseLabel.ForeColor = Theme.Danger;
+                    _licenseLabel.ForeColor = Theme.DangerLight;
                     using (var form = new LicenseForm(_settings, _api, result.Message, mustActivate: true))
                     {
                         if (form.ShowDialog(this) == DialogResult.OK)
                         {
                             _licenseLabel.Text = "🔑 Lizenz aktiv";
-                            _licenseLabel.ForeColor = Theme.Green;
+                            _licenseLabel.ForeColor = Theme.GreenLight;
                             _licenseTimer.Start();
                         }
                         else

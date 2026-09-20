@@ -13,6 +13,10 @@ public static class Theme
     public static readonly Color Muted = Color.FromArgb(0x6B, 0x72, 0x80);
     public static readonly Color Green = Color.FromArgb(0x06, 0x5F, 0x46);
     public static readonly Color Danger = Color.FromArgb(0xDC, 0x26, 0x26);
+    public static readonly Color GreenLight = Color.FromArgb(0x34, 0xD3, 0x99);
+    public static readonly Color AccentLight = Color.FromArgb(0xFD, 0xBA, 0x74);
+    public static readonly Color DangerLight = Color.FromArgb(0xF8, 0x71, 0x71);
+    public static readonly Color SidebarText = Color.FromArgb(0xC7, 0xCB, 0xE0);
 
     public static readonly Font Body = new(FontFamily(), 10f);
     public static readonly Font Bold = new(FontFamily(), 10f, FontStyle.Bold);
