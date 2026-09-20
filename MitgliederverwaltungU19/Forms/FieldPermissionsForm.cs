@@ -61,6 +61,7 @@ public sealed class FieldPermissionsForm : Form
         var bulkEdit = Theme.MakeButton("ansehen & ändern");
         var bulkView = Theme.MakeButton("nur ansehen");
         var bulkHide = Theme.MakeButton("ausblenden");
+        bulkEdit.UseMnemonic = false; // "&" im Text nicht als Tastenkürzel deuten
         bulkEdit.Click += (_, _) => SetAllPlayers(Edit);
         bulkView.Click += (_, _) => SetAllPlayers(View);
         bulkHide.Click += (_, _) => SetAllPlayers(Hidden);
