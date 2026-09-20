@@ -15,8 +15,6 @@ public sealed class StaffPanel : UserControl
         ("nachname", "Nachname", false, false, true),
         ("vorname", "Vorname", false, false, true),
         ("position", "Position (z. B. HC, OC, DC, TM)", false, false, false),
-        ("nada", "Nada", false, false, false),
-        ("nada_gueltig_bis", "Nada gültig bis", true, false, false),
         ("geburtsdatum", "Geburtsdatum", true, false, false),
         ("telefon", "Telefon", false, false, false),
         ("email", "Mail", false, false, false),
@@ -48,7 +46,7 @@ public sealed class StaffPanel : UserControl
     private readonly Label _footer = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft };
     private readonly StatCard _cardTotal = new("Staff gesamt", Theme.Navy);
     private readonly StatCard _cardConfirmed = new("Daten bestätigt", Color.FromArgb(0x10, 0xB9, 0x81));
-    private readonly StatCard _cardExpiry = new("Ablauf NADA / Pass", Color.FromArgb(0xEA, 0xB3, 0x08));
+    private readonly StatCard _cardExpiry = new("Ablauf Reisepass", Color.FromArgb(0xEA, 0xB3, 0x08));
     private List<Dictionary<string, string?>> _all = new();
 
     public StaffPanel(ApiClient api, PingResult ping)
@@ -125,7 +123,7 @@ public sealed class StaffPanel : UserControl
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         foreach (var (key, label, weight) in new[]
                  {
-                     ("name", "Name", 17f), ("position", "Position", 9f), ("nada", "Nada", 9f), ("nada_gueltig_bis", "NADA", 9f),
+                     ("name", "Name", 19f), ("position", "Position", 10f),
                      ("telefon", "Telefon", 12f), ("email", "E-Mail", 19f), ("reisepass_gueltig_bis", "Pass", 9f),
                      ("status", "Status", 7f), ("bestaetigt", "Bestätigt", 9f),
                  })
@@ -136,8 +134,8 @@ public sealed class StaffPanel : UserControl
                 HeaderText = label,
                 FillWeight = weight,
                 SortMode = DataGridViewColumnSortMode.Automatic,
-                MinimumWidth = key is "nada_gueltig_bis" or "reisepass_gueltig_bis" ? Theme.Px(98) : key == "bestaetigt" ? Theme.Px(96) : Theme.Px(70),
-                ToolTipText = key == "nada_gueltig_bis" ? "NADA-Zertifikat gültig bis" : key == "reisepass_gueltig_bis" ? "Reisepass gültig bis" : "",
+                MinimumWidth = key == "reisepass_gueltig_bis" ? Theme.Px(98) : key == "bestaetigt" ? Theme.Px(96) : Theme.Px(70),
+                ToolTipText = key == "reisepass_gueltig_bis" ? "Reisepass gültig bis" : "",
             });
         }
         _grid.Columns.Add(Theme.LinkColumn());
@@ -229,19 +227,16 @@ public sealed class StaffPanel : UserControl
         _grid.Rows.Clear();
         foreach (var r in rows)
         {
-            var nada = Expiry.Check(Val(r, "nada_gueltig_bis"), DateTime.Today.AddMonths(Expiry.NadaWarnMonths), DateTime.Today, Expiry.NadaUrgentDays, redOnDay: true);
             var pass = Expiry.Check(Val(r, "reisepass_gueltig_bis"), DateTime.Today.AddMonths(Expiry.PassWarnMonths), DateTime.Today);
             var confirmed = Val(r, "bestaetigt_am");
             var idx = _grid.Rows.Add(
-                NameOf(r), Val(r, "position"), Val(r, "nada"),
-                Val(r, "nada_gueltig_bis").Length > 0 ? FormatDate(Val(r, "nada_gueltig_bis")) : "",
+                NameOf(r), Val(r, "position"),
                 Val(r, "telefon"), Val(r, "email"),
                 Val(r, "reisepass_gueltig_bis").Length > 0 ? FormatDate(Val(r, "reisepass_gueltig_bis")) : "",
                 Val(r, "status") == "inaktiv" ? "Inaktiv" : "Aktiv",
                 confirmed.Length == 0 ? "ausstehend" : "✓ " + FormatDate(confirmed));
             var row = _grid.Rows[idx];
             row.Tag = r;
-            MarkExpiry(row.Cells["nada_gueltig_bis"], nada);
             MarkExpiry(row.Cells["reisepass_gueltig_bis"], pass);
             row.Cells["bestaetigt"].Style.ForeColor = confirmed.Length == 0 ? Theme.AccentDark : Theme.Green;
             if (Val(r, "status") == "inaktiv") row.DefaultCellStyle.ForeColor = Theme.Muted;
@@ -252,7 +247,6 @@ public sealed class StaffPanel : UserControl
         var active = _all.Count(r => Val(r, "status") != "inaktiv");
         var confirmedCount = _all.Count(r => Val(r, "bestaetigt_am").Length > 0);
         var expiring = _all.Count(r =>
-            Expiry.Check(Val(r, "nada_gueltig_bis"), DateTime.Today.AddMonths(Expiry.NadaWarnMonths), DateTime.Today, Expiry.NadaUrgentDays, redOnDay: true).State != ExpiryState.Ok ||
             Expiry.Check(Val(r, "reisepass_gueltig_bis"), DateTime.Today.AddMonths(Expiry.PassWarnMonths), DateTime.Today).State != ExpiryState.Ok);
         _cardTotal.Set(_all.Count.ToString(), $"Staff · {active} aktiv");
         _cardConfirmed.Set(confirmedCount.ToString(), $"Bestätigt · {_all.Count - confirmedCount} offen");
