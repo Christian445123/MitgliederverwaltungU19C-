@@ -29,7 +29,7 @@ internal sealed class SideNavButton : Button
         Height = 38;
         Margin = new Padding(0, 1, 0, 1);
         TextAlign = ContentAlignment.MiddleLeft;
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
 
     protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
@@ -66,7 +66,7 @@ internal sealed class SideNavButton : Button
 
         var textFont = Active ? Theme.Bold : Theme.Body;
         var textFmt = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(Text, textFont, textBrush, new RectangleF(rect.X + Theme.Px(46), rect.Y, rect.Width - Theme.Px(46) - Theme.Px(Badge > 0 ? 36 : 6), rect.Height), textFmt);
+        g.DrawString(Text, textFont, textBrush, new RectangleF(rect.X + Theme.Px(46), rect.Y, rect.Width - Theme.Px(46) - Theme.Px(Badge > 0 ? 30 : 6), rect.Height), textFmt);
 
         if (Badge > 0)
         {
@@ -118,6 +118,7 @@ internal sealed class StatCard : Panel
         DoubleBuffered = true;
         _accent = accent;
         _caption = caption;
+        SetStyle(ControlStyles.ResizeRedraw, true); // nach Größenänderung komplett neu zeichnen
         if (clickable) Cursor = Cursors.Hand;
     }
 

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using MitgliederverwaltungU19.Forms;
 using MitgliederverwaltungU19.Services;
 
@@ -5,9 +7,57 @@ namespace MitgliederverwaltungU19;
 
 internal static class Program
 {
-    [STAThread]
-    private static void Main()
+    private static Mutex? _instanceMutex;
+
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+
+    /// <summary>Nur eine Instanz pro Windows-Sitzung: Ein zweiter Start holt das vorhandene Fenster nach vorn und beendet sich.</summary>
+    private static bool AcquireSingleInstance(bool restarted)
     {
+        _instanceMutex = new Mutex(false, @"Local\AFBOE_U19_Mitgliederverwaltung");
+        try
+        {
+            // Nach einem Neustart der Anwendung kann die alte Instanz noch kurz laufen: dann kurz warten
+            if (_instanceMutex.WaitOne(restarted ? 10000 : 0)) return true;
+        }
+        catch (AbandonedMutexException)
+        {
+            return true; // die vorherige Instanz wurde hart beendet
+        }
+
+        try
+        {
+            var self = Process.GetCurrentProcess();
+            foreach (var p in Process.GetProcessesByName(self.ProcessName))
+            {
+                if (p.Id == self.Id || p.MainWindowHandle == IntPtr.Zero) continue;
+                if (IsIconic(p.MainWindowHandle)) ShowWindow(p.MainWindowHandle, 9); // SW_RESTORE
+                SetForegroundWindow(p.MainWindowHandle);
+                break;
+            }
+        }
+        catch (Exception)
+        {
+        }
+        return false;
+    }
+
+    /// <summary>Startet die Anwendung neu (z. B. nach Abmelden oder geänderten Einstellungen) und beendet diese Instanz.</summary>
+    public static void RestartApp()
+    {
+        if (Environment.ProcessPath is { } exe)
+        {
+            Process.Start(new ProcessStartInfo(exe, "--restart") { UseShellExecute = false });
+        }
+        Environment.Exit(0);
+    }
+
+    [STAThread]
+    private static void Main(string[] args)
+    {
+        if (!AcquireSingleInstance(args.Contains("--restart"))) return;
         ApplicationConfiguration.Initialize();
         Application.SetDefaultFont(Theme.Body);
         var settings = AppSettings.Load();

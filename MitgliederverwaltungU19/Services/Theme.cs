@@ -248,6 +248,27 @@ public static class Theme
         }
     }
 
+    /// <summary>
+    /// Blendet Tabellenspalten nach Wichtigkeit aus, wenn das Fenster zu schmal ist (kein seitliches Scrollen, nichts abgeschnitten),
+    /// und blendet sie bei mehr Platz wieder ein.
+    /// </summary>
+    /// <param name="hideOrder">Spaltennamen in der Reihenfolge, in der sie zuerst ausgeblendet werden.</param>
+    /// <param name="wishWidths">Gewünschte Mindestbreite je Spalte (bei 100 % Zoom); nicht genannte Spalten brauchen 100.</param>
+    public static void FitColumns(DataGridView g, string[] hideOrder, IReadOnlyDictionary<string, int> wishWidths)
+    {
+        if (g.Width <= 0 || g.Columns.Count == 0) return;
+        var available = g.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+        int Need() => g.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible)
+            .Sum(c => c.Name == "link" ? Math.Max(c.Width, Px(110)) : Px(wishWidths.TryGetValue(c.Name, out var w) ? w : 100));
+
+        foreach (DataGridViewColumn c in g.Columns) c.Visible = true;
+        foreach (var name in hideOrder)
+        {
+            if (Need() <= available) break;
+            if (g.Columns.Contains(name)) g.Columns[name].Visible = false;
+        }
+    }
+
     /// <summary>Feste Dialoge wachsen mit, wenn später Inhalt erscheint (Fortschritt, Fehlermeldung, Ergebnisliste).</summary>
     private static void KeepFitted(Form form)
     {

@@ -141,6 +141,18 @@ public sealed class StaffPanel : UserControl
             });
         }
         _grid.Columns.Add(Theme.LinkColumn());
+        var wish = new Dictionary<string, int> { ["name"] = 190, ["position"] = 110, ["telefon"] = 130, ["email"] = 210, ["reisepass_gueltig_bis"] = 105, ["status"] = 80, ["bestaetigt"] = 120 };
+        var hideOrder = new[] { "telefon", "status", "position", "reisepass_gueltig_bis", "bestaetigt", "email" };
+        var fitting = false;
+        void Refit()
+        {
+            if (fitting) return;
+            fitting = true;
+            try { Theme.FitColumns(_grid, hideOrder, wish); }
+            finally { fitting = false; }
+        }
+        _grid.SizeChanged += (_, _) => Refit();
+        _grid.HandleCreated += (_, _) => Refit();
 
         var gridCard = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Border, Padding = new Padding(1) };
         gridCard.Controls.Add(_grid);

@@ -27,7 +27,7 @@ public sealed class MainForm : Form
     private UpdateInfo? _update;
     private string? _updateMsi; // bereits im Hintergrund geladene Installationsdatei
     private readonly System.Windows.Forms.Timer _licenseTimer = new() { Interval = 10 * 60 * 1000 };
-    private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(186, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 4, 0, 10) };
+    private readonly Label _licenseLabel = new() { AutoSize = true, MaximumSize = new Size(202, 0), ForeColor = Theme.SidebarText, Margin = new Padding(20, 4, 0, 10) };
     private readonly StatCard _cardTotal = new("Mitglieder gesamt", Theme.Navy);
     private readonly StatCard _cardKader = new("Im Kader", Theme.Accent);
     private readonly StatCard _cardConfirmed = new("Daten bestätigt", Color.FromArgb(0x10, 0xB9, 0x81));
@@ -111,7 +111,7 @@ public sealed class MainForm : Form
         export.Enabled = _ping.Can("members.export");
 
         // ── Seitenleiste ──────────────────────────────────────────────────
-        var sidebar = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Theme.Navy };
+        var sidebar = new Panel { Dock = DockStyle.Left, Width = 240, BackColor = Theme.Navy };
 
         var brand = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Theme.Navy };
         var mark = new Label
@@ -147,7 +147,7 @@ public sealed class MainForm : Form
 
         SideNavButton Nav(string text, string glyph, Action click, bool active = false)
         {
-            var b = new SideNavButton(text, glyph) { Width = 224, Active = active };
+            var b = new SideNavButton(text, glyph) { Width = 240, Active = active };
             b.Click += (_, _) => click();
             nav.Controls.Add(b);
             return b;
@@ -178,21 +178,21 @@ public sealed class MainForm : Form
             Padding = new Padding(0, 6, 0, 10),
             BackColor = Theme.Navy,
         };
-        var sep = new Panel { Height = 1, Width = 184, BackColor = Color.FromArgb(0x26, 0x2C, 0x4D), Margin = new Padding(20, 0, 20, 6) };
+        var sep = new Panel { Height = 1, Width = 200, BackColor = Color.FromArgb(0x26, 0x2C, 0x4D), Margin = new Padding(20, 0, 20, 6) };
         bottom.Controls.Add(sep);
 
-        var accountButton = new SideNavButton("Konto", "") { Width = 224, Enabled = signedIn };
+        var accountButton = new SideNavButton("Konto", "") { Width = 240, Enabled = signedIn };
         accountButton.Click += (_, _) =>
         {
             if (_ping.User is not { } who) return;
             using var form = new AccountForm(_api, who.Username, who.Role);
             form.ShowDialog(this);
         };
-        var settingsButton = new SideNavButton("Einstellungen", "") { Width = 224 };
+        var settingsButton = new SideNavButton("Einstellungen", "") { Width = 240 };
         settingsButton.Click += (_, _) => OpenSettings();
         bottom.Controls.Add(accountButton);
         bottom.Controls.Add(settingsButton);
-        var logoutButton = new SideNavButton("Abmelden", "") { Width = 224, Enabled = signedIn };
+        var logoutButton = new SideNavButton("Abmelden", "") { Width = 240, Enabled = signedIn };
         logoutButton.Click += async (_, _) => await LogoutAsync();
         bottom.Controls.Add(logoutButton);
 
@@ -216,7 +216,7 @@ public sealed class MainForm : Form
         var account = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(186, 0),
+            MaximumSize = new Size(202, 0),
             ForeColor = Theme.SidebarText,
             Margin = new Padding(20, 6, 0, 0),
             UseMnemonic = false,
@@ -303,6 +303,19 @@ public sealed class MainForm : Form
         AddColumn("nada", "NADA", 9);
         AddColumn("pass", "Pass", 9);
         _grid.Columns.Add(Theme.LinkColumn());
+        // Bei schmalem Fenster weniger wichtige Spalten ausblenden (Reihenfolge: zuerst Telefon, zuletzt E-Mail)
+        var wish = new Dictionary<string, int> { ["name"] = 170, ["verein"] = 130, ["position"] = 100, ["jersey"] = 60, ["email"] = 200, ["telefon"] = 130, ["status"] = 80, ["kader"] = 110, ["bestaetigt"] = 120, ["nada"] = 105, ["pass"] = 105 };
+        var hideOrder = new[] { "telefon", "kader", "status", "jersey", "position", "pass", "nada", "verein", "bestaetigt", "email" };
+        var fitting = false;
+        void Refit()
+        {
+            if (fitting) return;
+            fitting = true;
+            try { Theme.FitColumns(_grid, hideOrder, wish); }
+            finally { fitting = false; }
+        }
+        _grid.SizeChanged += (_, _) => Refit();
+        _grid.HandleCreated += (_, _) => Refit();
         _grid.CellContentClick += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "link" || _grid.Rows[e.RowIndex].Tag is not Member m) return;
@@ -788,7 +801,7 @@ public sealed class MainForm : Form
         await _api.LogoutAsync();
         _settings.SessionToken = "";
         _settings.Save();
-        Application.Restart();
+        Program.RestartApp();
         Environment.Exit(0);
     }
 
@@ -797,7 +810,7 @@ public sealed class MainForm : Form
         using var form = new SettingsForm(_settings, firstRun: false);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
-            Application.Restart();
+            Program.RestartApp();
             Environment.Exit(0);
         }
     }
