@@ -10,10 +10,48 @@ namespace MitgliederverwaltungU19.Services;
 public sealed class ApiException : Exception
 {
     public HttpStatusCode? Status { get; }
-    public ApiException(string message, HttpStatusCode? status = null) : base(message) => Status = status;
+
+    /// <summary>Fehlercode des Servers (z. B. session_expired, invalid_credentials, must_change_password) oder leer.</summary>
+    public string Code { get; }
+
+    public ApiException(string message, HttpStatusCode? status = null, string code = "") : base(message)
+    {
+        Status = status;
+        Code = code;
+    }
 }
 
-public sealed record PingResult(string TokenName, bool CanWrite);
+/// <summary>Angemeldeter Web-Benutzer mit seinen Rechten (wie im Web-Panel unter Rollen und Rechte).</summary>
+public sealed record UserInfo(int Id, string Username, string Role, IReadOnlySet<string> Permissions)
+{
+    public bool Can(string permission) => Permissions.Contains(permission);
+
+    public static UserInfo FromJson(JsonElement e)
+    {
+        var perms = new HashSet<string>();
+        if (e.TryGetProperty("permissions", out var p) && p.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var x in p.EnumerateArray())
+            {
+                if (x.GetString() is { } s) perms.Add(s);
+            }
+        }
+        return new UserInfo(
+            e.TryGetProperty("id", out var id) ? id.GetInt32() : 0,
+            e.TryGetProperty("username", out var u) ? u.GetString() ?? "" : "",
+            e.TryGetProperty("role", out var r) ? r.GetString() ?? "" : "",
+            perms);
+    }
+}
+
+/// <summary>Ergebnis der Anmeldung: Sitzungs-Token (nur jetzt sichtbar), Ablauf und Benutzer.</summary>
+public sealed record LoginResult(string Token, string ExpiresAt, UserInfo User);
+
+public sealed record PingResult(string TokenName, bool CanWrite, UserInfo? User = null)
+{
+    /// <summary>Darf der angemeldete Benutzer das? Ohne Benutzer (nur API-Schlüssel) gilt der Schlüssel.</summary>
+    public bool Can(string permission) => User is null || User.Can(permission);
+}
 
 public sealed class ImportRow
 {
@@ -106,7 +144,46 @@ public sealed class ApiClient : IDisposable
     {
         using var doc = await SendJsonAsync(HttpMethod.Get, "ping", null, ct);
         var root = doc.RootElement;
-        return new PingResult(root.GetProperty("token").GetString() ?? "", root.GetProperty("write").GetBoolean());
+        UserInfo? user = root.TryGetProperty("user", out var u) && u.ValueKind == JsonValueKind.Object ? UserInfo.FromJson(u) : null;
+        return new PingResult(root.GetProperty("token").GetString() ?? "", root.GetProperty("write").GetBoolean(), user);
+    }
+
+    /// <summary>Sitzungs-Token des angemeldeten Benutzers; wird bei allen Anfragen als X-User-Token mitgeschickt.</summary>
+    public string SessionToken
+    {
+        get => _sessionToken;
+        set
+        {
+            _sessionToken = value ?? "";
+            _http.DefaultRequestHeaders.Remove("X-User-Token");
+            if (_sessionToken.Length > 0) _http.DefaultRequestHeaders.Add("X-User-Token", _sessionToken);
+        }
+    }
+    private string _sessionToken = "";
+
+    /// <summary>Meldet mit den Benutzerdaten des Web-Panels an (Benutzername und Passwort).</summary>
+    public async Task<LoginResult> LoginAsync(string username, string password, bool remember, string machineName, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["username"] = username, ["password"] = password, ["remember"] = remember, ["machine_name"] = machineName };
+        using var doc = await SendJsonAsync(HttpMethod.Post, "auth/login", body, ct);
+        var root = doc.RootElement;
+        return new LoginResult(
+            root.GetProperty("token").GetString() ?? "",
+            root.TryGetProperty("expires_at", out var ex) ? ex.GetString() ?? "" : "",
+            UserInfo.FromJson(root.GetProperty("user")));
+    }
+
+    /// <summary>Beendet die Sitzung auf dem Server (Fehler werden ignoriert).</summary>
+    public async Task LogoutAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var _ = await SendJsonAsync(HttpMethod.Post, "auth/logout", null, ct);
+        }
+        catch (ApiException)
+        {
+        }
+        SessionToken = "";
     }
 
     /// <summary>Lädt alle Mitglieder (seitenweise).</summary>
@@ -367,12 +444,17 @@ public sealed class ApiClient : IDisposable
         if (response.IsSuccessStatusCode) return;
 
         var message = $"Fehler {(int)response.StatusCode} {response.ReasonPhrase}";
+        var code = "";
         try
         {
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("error", out var err))
             {
                 message = err.GetString() ?? message;
+            }
+            if (doc.RootElement.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String)
+            {
+                code = c.GetString() ?? "";
             }
             if (doc.RootElement.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Array)
             {
@@ -383,11 +465,11 @@ public sealed class ApiClient : IDisposable
         {
             // kein JSON -> Standardtext
         }
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        if (response.StatusCode == HttpStatusCode.Unauthorized && code.Length == 0)
         {
             message = "API-Schlüssel ungültig oder widerrufen.";
         }
-        throw new ApiException(message, response.StatusCode);
+        throw new ApiException(message, response.StatusCode, code);
     }
 
     public void Dispose() => _http.Dispose();

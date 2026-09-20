@@ -27,7 +27,9 @@ internal static class Program
                 // Task.Run: kein Deadlock, auch wenn bereits ein UI-Kontext existiert
                 var ping = Task.Run(() => api.PingAsync()).GetAwaiter().GetResult();
                 if (!RunLicenseGate(settings, api)) return;
-                Application.Run(new MainForm(settings, api, ping));
+                var signedIn = RunLoginGate(settings, api);
+                if (signedIn is null) return; // Anmeldung abgebrochen
+                Application.Run(new MainForm(settings, api, signedIn));
                 return;
             }
             catch (Exception ex)
@@ -39,6 +41,47 @@ internal static class Program
 
                 using var form = new SettingsForm(settings, firstRun: false);
                 if (form.ShowDialog() != DialogResult.OK) return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Anmeldung mit den Benutzerdaten des Web-Panels. Bei „Angemeldet bleiben“ wird die gespeicherte Sitzung verwendet,
+    /// sonst (oder wenn sie abgelaufen ist) erscheint das Anmeldefenster. Liefert null, wenn abgebrochen wurde.
+    /// </summary>
+    private static PingResult? RunLoginGate(AppSettings settings, ApiClient api)
+    {
+        var message = "";
+        var stored = settings.SessionToken;
+        if (stored.Length > 0)
+        {
+            api.SessionToken = stored;
+            try
+            {
+                var restored = Task.Run(() => api.PingAsync()).GetAwaiter().GetResult();
+                if (restored.User is not null) return restored;
+            }
+            catch (ApiException ex)
+            {
+                message = ex.Code == "session_expired" ? "Die Anmeldung ist abgelaufen. Bitte neu anmelden." : ex.Message;
+            }
+            api.SessionToken = "";
+            settings.SessionToken = "";
+            settings.Save();
+        }
+
+        while (true)
+        {
+            using var form = new LoginForm(settings, api, message);
+            if (form.ShowDialog() != DialogResult.OK) return null;
+            try
+            {
+                return Task.Run(() => api.PingAsync()).GetAwaiter().GetResult();
+            }
+            catch (ApiException ex)
+            {
+                message = ex.Message;
+                api.SessionToken = "";
             }
         }
     }

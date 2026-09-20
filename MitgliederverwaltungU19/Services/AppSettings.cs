@@ -81,6 +81,35 @@ public sealed class AppSettings
     /// <summary>Zeitstempel der zuletzt übernommenen Installer-Eingaben (siehe SetupImport).</summary>
     public string SetupStamp { get; set; } = "";
 
+    // ── Anmeldung (Benutzerdaten des Web-Panels) ───────────────────────────
+
+    /// <summary>Zuletzt angemeldeter Benutzername (wird im Anmeldefenster vorbelegt).</summary>
+    public string LastUsername { get; set; } = "";
+
+    public string SessionTokenProtected { get; set; } = "";
+
+    /// <summary>Sitzungs-Token bei „Angemeldet bleiben“ (per DPAPI geschützt); leer = beim nächsten Start neu anmelden.</summary>
+    [JsonIgnore]
+    public string SessionToken
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(SessionTokenProtected)) return "";
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(SessionTokenProtected), null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch (Exception)
+            {
+                return "";
+            }
+        }
+        set => SessionTokenProtected = string.IsNullOrEmpty(value)
+            ? ""
+            : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
+    }
+
     // ── Programm-Updates (GitHub Releases) ─────────────────────────────────
 
     /// <summary>GitHub-Repository der Anwendung im Format "Besitzer/Repository".</summary>

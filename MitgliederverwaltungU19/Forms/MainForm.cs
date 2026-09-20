@@ -87,7 +87,7 @@ public sealed class MainForm : Form
         var delete = Theme.MakeButton("Auswahl löschen");
         var deleteAll = Theme.MakeButton("Alle löschen …");
         deleteAll.ForeColor = Theme.Danger;
-        deleteAll.Enabled = _ping.CanWrite;
+        deleteAll.Enabled = _ping.CanWrite && _ping.Can("members.delete_all");
 
         add.Click += async (_, _) => await OpenEditorAsync(null);
         export.Click += async (_, _) => await ExportAsync();
@@ -95,6 +95,9 @@ public sealed class MainForm : Form
         delete.Click += async (_, _) => await DeleteSelectedAsync();
         deleteAll.Click += async (_, _) => await DeleteAllAsync();
         _writeButtons.AddRange(new[] { add, edit, delete });
+        add.Enabled = _ping.CanWrite && _ping.Can("members.create");
+        delete.Enabled = _ping.CanWrite && _ping.Can("members.delete");
+        export.Enabled = _ping.Can("members.export");
 
         // ── Seitenleiste ──────────────────────────────────────────────────
         var sidebar = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Theme.Navy };
@@ -138,10 +141,10 @@ public sealed class MainForm : Form
         }
 
         Nav("Mitglieder", "", () => _grid.Focus(), active: true);
-        Nav("Staff", "", () => { using var form = new StaffForm(_api, _ping.CanWrite); form.ShowDialog(this); });
+        Nav("Staff", "", () => { using var form = new StaffForm(_api, _ping.CanWrite && _ping.Can("staff.edit")); form.ShowDialog(this); }).Enabled = _ping.Can("staff.view");
         var import = Nav("Import …", "", async () => await OpenImportAsync());
-        import.Enabled = _ping.CanWrite;
-        Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); });
+        import.Enabled = _ping.CanWrite && _ping.Can("members.import");
+        Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); }).Enabled = _ping.Can("members.export");
         _navExpiry = Nav("Ablaufdaten", "", ShowExpiry);
         _navMissing = Nav("Dokumente fehlen", "", ShowMissing);
         Nav("Aktualisieren", "", async () => await ReloadAsync());
@@ -160,7 +163,7 @@ public sealed class MainForm : Form
         var sep = new Panel { Height = 1, Width = 184, BackColor = Color.FromArgb(0x26, 0x2C, 0x4D), Margin = new Padding(20, 0, 20, 6) };
         bottom.Controls.Add(sep);
 
-        var deploy = new SideNavButton("Änderungen einspielen", "") { Width = 236, Enabled = _ping.CanWrite };
+        var deploy = new SideNavButton("Änderungen einspielen", "") { Width = 224, Enabled = _ping.CanWrite && _ping.Can("system.update") };
         deploy.Click += (_, _) =>
         {
             // Nicht-modal: Das Fenster darf für die Automatik geöffnet bleiben, während die App weiter benutzt wird
@@ -174,10 +177,13 @@ public sealed class MainForm : Form
                 _deployForm.Activate();
             }
         };
-        var settingsButton = new SideNavButton("Einstellungen", "") { Width = 236 };
+        var settingsButton = new SideNavButton("Einstellungen", "") { Width = 224 };
         settingsButton.Click += (_, _) => OpenSettings();
         bottom.Controls.Add(deploy);
         bottom.Controls.Add(settingsButton);
+        var logoutButton = new SideNavButton("Abmelden", "E7E8") { Width = 224, Enabled = _ping.User is not null };
+        logoutButton.Click += async (_, _) => await LogoutAsync();
+        bottom.Controls.Add(logoutButton);
 
         _updateButton.Visible = false;
         _updateButton.AutoSize = false;
@@ -383,9 +389,9 @@ public sealed class MainForm : Form
 
     private async Task OpenEditorAsync(Member? member)
     {
-        if (member is null && !_ping.CanWrite) return;
+        if (member is null && !(_ping.CanWrite && _ping.Can("members.create"))) return;
 
-        using var form = new MemberForm(_api, member, readOnly: !_ping.CanWrite);
+        using var form = new MemberForm(_api, member, readOnly: !(_ping.CanWrite && _ping.Can("members.edit")));
         var saved = form.ShowDialog(this) == DialogResult.OK;
         if (saved || form.DocumentsChanged)
         {
@@ -671,6 +677,17 @@ public sealed class MainForm : Form
         {
             // Keine Internetverbindung o. Ä.: beim Start nicht stören
         }
+    }
+
+    /// <summary>Meldet den Benutzer ab (auch auf dem Server) und startet die Anwendung mit dem Anmeldefenster neu.</summary>
+    private async Task LogoutAsync()
+    {
+        if (MessageBox.Show(this, "Jetzt abmelden? Die Anwendung wird danach neu gestartet.", "Abmelden", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        await _api.LogoutAsync();
+        _settings.SessionToken = "";
+        _settings.Save();
+        Application.Restart();
+        Environment.Exit(0);
     }
 
     private void OpenSettings()
