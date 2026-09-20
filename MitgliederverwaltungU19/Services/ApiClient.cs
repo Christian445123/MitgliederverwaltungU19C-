@@ -300,13 +300,14 @@ public sealed class ApiClient : IDisposable
         return DownloadAsync(path, ct);
     }
 
-    public Task<byte[]> DownloadCsvAsync(string? status, bool template, CancellationToken ct = default)
+    public Task<byte[]> DownloadCsvAsync(string? status, bool template, CancellationToken ct = default, bool staff = false)
     {
-        var path = template ? "template.csv" : "members.csv" + (status is null ? "" : "?status=" + status);
+        var query = status is null ? "" : "?status=" + status;
+        var path = template ? "template.csv" + (staff ? "?entity=staff" : "") : (staff ? "staff.csv" : "members.csv") + query;
         return DownloadAsync(path, ct);
     }
 
-    public async Task<ImportResponse> ImportAsync(string filePath, bool updateExisting, bool commit, string? kaderDefault = null, Dictionary<int, string>? mapping = null, CancellationToken ct = default)
+    public async Task<ImportResponse> ImportAsync(string filePath, bool updateExisting, bool commit, string? kaderDefault = null, Dictionary<int, string>? mapping = null, CancellationToken ct = default, string entity = "members")
     {
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(await File.ReadAllBytesAsync(filePath, ct));
@@ -314,6 +315,7 @@ public sealed class ApiClient : IDisposable
         form.Add(new StringContent(updateExisting ? "1" : "0"), "update_existing");
         form.Add(new StringContent(commit ? "1" : "0"), "commit");
         form.Add(new StringContent(kaderDefault ?? ""), "kader_default");
+        form.Add(new StringContent(entity), "entity");
         if (mapping is { Count: > 0 })
         {
             form.Add(new StringContent(JsonSerializer.Serialize(mapping.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value))), "mapping");
@@ -450,6 +452,122 @@ public sealed class ApiClient : IDisposable
     public async Task DeleteUserAsync(int id, CancellationToken ct = default)
     {
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"admin/users/{id}", null, ct);
+    }
+
+    // ── Verwaltung: Feld-Rechte, Camps, Protokoll, Passwort, Zugangslinks ──
+
+    private static string Str(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) ? (v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : v.ValueKind == JsonValueKind.Null ? "" : v.ToString()) : "";
+
+    public async Task<List<FieldPerm>> GetFieldPermissionsAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "manage/field-permissions", null, ct);
+        return doc.RootElement.GetProperty("fields").EnumerateArray().Select(f => new FieldPerm
+        {
+            Key = Str(f, "key"),
+            Label = Str(f, "label"),
+            Group = Str(f, "group"),
+            AdminOnly = f.GetProperty("admin_only").GetBoolean(),
+            Core = f.GetProperty("core").GetBoolean(),
+            Player = Str(f, "player"),
+            Editor = f.GetProperty("editor").GetBoolean(),
+        }).ToList();
+    }
+
+    public async Task SaveFieldPermissionsAsync(IEnumerable<FieldPerm> fields, CancellationToken ct = default)
+    {
+        var map = new JsonObject();
+        foreach (var f in fields)
+        {
+            map[f.Key] = new JsonObject { ["player"] = f.Player, ["editor"] = f.Editor };
+        }
+        using var _ = await SendJsonAsync(HttpMethod.Put, "manage/field-permissions", new JsonObject { ["fields"] = map }, ct);
+    }
+
+    public async Task ResetFieldPermissionsAsync(CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Post, "manage/field-permissions/reset", new JsonObject(), ct);
+    }
+
+    private static List<CampInfo> ParseCamps(JsonElement camps) => camps.EnumerateArray()
+        .Select(c => new CampInfo(c.GetProperty("id").GetInt32(), Str(c, "name"), c.TryGetProperty("members", out var m) ? m.GetInt32() : 0)).ToList();
+
+    /// <summary>Camps zum Ankreuzen im Mitgliedsformular (lesen).</summary>
+    public async Task<List<CampInfo>> GetCampListAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "camps", null, ct);
+        return ParseCamps(doc.RootElement.GetProperty("camps"));
+    }
+
+    public async Task<(List<string> Fixed, List<CampInfo> Camps)> GetCampsAdminAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "manage/camps", null, ct);
+        var fixedNames = doc.RootElement.GetProperty("fixed").EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+        return (fixedNames, ParseCamps(doc.RootElement.GetProperty("camps")));
+    }
+
+    public async Task CreateCampAsync(string name, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Post, "manage/camps", new JsonObject { ["name"] = name }, ct);
+    }
+
+    public async Task RenameCampAsync(int id, string name, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Put, $"manage/camps/{id}", new JsonObject { ["name"] = name }, ct);
+    }
+
+    public async Task DeleteCampAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"manage/camps/{id}", null, ct);
+    }
+
+    private static string LogQuery(LogFilter f, int? page)
+    {
+        var parts = new List<string>();
+        void Add(string key, string value) { if (!string.IsNullOrWhiteSpace(value)) parts.Add(key + "=" + Uri.EscapeDataString(value.Trim())); }
+        Add("source", f.Source); Add("level", f.Level); Add("action", f.Action); Add("actor", f.Actor); Add("q", f.Query); Add("from", f.From); Add("to", f.To);
+        if (page is { } p) parts.Add("page=" + p);
+        return parts.Count == 0 ? "" : "?" + string.Join("&", parts);
+    }
+
+    public async Task<LogPage> GetLogsAsync(LogFilter filter, int page, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "manage/logs" + LogQuery(filter, page), null, ct);
+        var r = doc.RootElement;
+        var entries = r.GetProperty("entries").EnumerateArray().Select(e => new LogEntry(
+            e.TryGetProperty("id", out var id) ? long.Parse(id.ToString()) : 0,
+            Str(e, "created_at"), Str(e, "source"), Str(e, "level"), Str(e, "action"), Str(e, "actor"), Str(e, "message"),
+            Str(e, "ip"), Str(e, "http_method"), Str(e, "path"), Str(e, "status_code"), Str(e, "details"))).ToList();
+        var stats = r.GetProperty("stats");
+        int S(string n) => stats.TryGetProperty(n, out var v) ? v.GetInt32() : 0;
+        return new LogPage(r.GetProperty("total").GetInt32(), r.GetProperty("page").GetInt32(), r.GetProperty("pages").GetInt32(), entries,
+            S("requests"), S("errors"), S("warnings"), S("failed_logins"),
+            r.GetProperty("actions").EnumerateArray().Select(a => a.GetString() ?? "").ToList());
+    }
+
+    public Task<byte[]> DownloadLogsCsvAsync(LogFilter filter, CancellationToken ct = default) =>
+        DownloadAsync("manage/logs.csv" + LogQuery(filter, null), ct);
+
+    public async Task<int> PurgeLogsAsync(int days, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Post, "manage/logs/purge", new JsonObject { ["days"] = days }, ct);
+        return doc.RootElement.GetProperty("deleted").GetInt32();
+    }
+
+    public async Task ChangePasswordAsync(string current, string newPassword, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Post, "auth/password", new JsonObject { ["current_password"] = current, ["new_password"] = newPassword }, ct);
+    }
+
+    /// <summary>Persönlicher Link eines Mitglieds. action: "", "regenerate_link", "regenerate_password" oder "send_email".</summary>
+    public async Task<LinkInfo> GetMemberLinkAsync(int memberId, string action = "", CancellationToken ct = default)
+    {
+        using var doc = action.Length == 0
+            ? await SendJsonAsync(HttpMethod.Get, $"members/{memberId}/link", null, ct)
+            : await SendJsonAsync(HttpMethod.Post, $"members/{memberId}/link", new JsonObject { ["action"] = action }, ct);
+        var r = doc.RootElement;
+        string? Nullable(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        return new LinkInfo(Str(r, "name"), Str(r, "email"), Str(r, "link"), Nullable("verified_at"), Nullable("password"), Str(r, "message"));
     }
 
     /// <summary>Setzt oder entfernt die "Fehlt"-Markierung eines Pflichtdokuments (nada, pass, ecard, rechte).</summary>

@@ -14,8 +14,6 @@ public sealed class AppSettings
     public string BaseUrl { get; set; } = "";
     public string TokenProtected { get; set; } = "";
 
-    /// <summary>Ordner des Web-Projekts (Git-Repository) für "Änderungen einspielen".</summary>
-    public string RepoPath { get; set; } = "";
 
     [JsonIgnore]
     public string Token

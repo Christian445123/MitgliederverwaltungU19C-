@@ -19,6 +19,9 @@ public sealed class ImportForm : Form
     private readonly RadioButton _kaderIn = new() { Text = "Alle importierten Spieler sind im Kader", AutoSize = true };
     private readonly RadioButton _kaderOut = new() { Text = "Alle importierten Spieler sind nicht im Kader", AutoSize = true };
     private readonly RadioButton _kaderFile = new() { Text = "Aus der Datei übernehmen (Spalte „Kader“), sonst „Im Kader“", AutoSize = true, Checked = true };
+    private readonly ComboBox _entity = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+    private readonly Label _kaderLabel = new() { Text = "Kader-Status der importierten Spieler:", AutoSize = true, Margin = new Padding(0, 8, 0, 2) };
+    private bool IsStaff => _entity.SelectedIndex == 1;
     private readonly DataGridView _grid = new();
     private readonly Label _summary = new() { AutoSize = true, MaximumSize = new Size(820, 0), Margin = new Padding(0, 6, 0, 6) };
     private readonly Button _preview = Theme.MakeButton("Vorschau");
@@ -68,8 +71,13 @@ public sealed class ImportForm : Form
             MaximumSize = new Size(820, 0),
             Text = "Unterstützt .xlsx und .csv. Erste Zeile = Spaltenüberschriften; Pflicht: Nachname, Vorname, Mail.",
         });
+        _entity.Items.AddRange(new object[] { "Spieler", "Staff (Trainer & Betreuer)" });
+        _entity.SelectedIndex = 0;
+        _entity.SelectedIndexChanged += (_, _) => { UpdateEntityText(); if (_file is not null) _ = RunAsync(commit: false); };
+        options.Controls.Add(new Label { Text = "Was wird importiert?", AutoSize = true, Margin = new Padding(0, 8, 0, 2) });
+        options.Controls.Add(_entity);
         options.Controls.Add(_update);
-        options.Controls.Add(new Label { Text = "Kader-Status der importierten Spieler:", AutoSize = true, Margin = new Padding(0, 8, 0, 2) });
+        options.Controls.Add(_kaderLabel);
         foreach (var radio in new[] { _kaderIn, _kaderOut, _kaderFile })
         {
             radio.CheckedChanged += (_, _) => { if (radio.Checked && _file is not null) _ = RunAsync(commit: false); };
@@ -132,13 +140,24 @@ public sealed class ImportForm : Form
         _ = RunAsync(commit: false);
     }
 
+    /// <summary>Texte und Auswahl passend zu „Spieler“ oder „Staff“ anpassen (beim Staff gibt es keinen Kader-Status, die Mail ist freiwillig).</summary>
+    private void UpdateEntityText()
+    {
+        var staff = IsStaff;
+        _update.Text = staff
+            ? "Vorhandene Personen (gleiche Mail oder gleicher Name) aktualisieren – leere Zellen überschreiben nichts"
+            : "Vorhandene Mitglieder (gleiche E-Mail) aktualisieren – leere Zellen überschreiben nichts";
+        _kaderLabel.Visible = _kaderIn.Visible = _kaderOut.Visible = _kaderFile.Visible = !staff;
+        Text = staff ? "Import aus CSV / Excel – Staff" : "Import aus CSV / Excel";
+    }
+
     private async Task DownloadTemplateAsync()
     {
-        using var dialog = new SaveFileDialog { Filter = "CSV (Excel)|*.csv", FileName = "mitglieder-vorlage.csv" };
+        using var dialog = new SaveFileDialog { Filter = "CSV (Excel)|*.csv", FileName = IsStaff ? "staff-vorlage.csv" : "mitglieder-vorlage.csv" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            await File.WriteAllBytesAsync(dialog.FileName, await _api.DownloadCsvAsync(null, template: true));
+            await File.WriteAllBytesAsync(dialog.FileName, await _api.DownloadCsvAsync(null, template: true, staff: IsStaff));
         }
         catch (Exception ex)
         {
@@ -153,7 +172,7 @@ public sealed class ImportForm : Form
         UseWaitCursor = true;
         try
         {
-            var response = await _api.ImportAsync(_file, _update.Checked, commit, KaderDefault(), _overrides);
+            var response = await _api.ImportAsync(_file, _update.Checked, commit, KaderDefault(), _overrides, default, IsStaff ? "staff" : "members");
 
             if (commit && response.Result is { } result)
             {

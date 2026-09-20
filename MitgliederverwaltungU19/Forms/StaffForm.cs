@@ -59,8 +59,22 @@ public sealed class StaffForm : Form
         var add = Theme.MakeButton("+ Neue Person", primary: true);
         var edit = Theme.MakeButton("Bearbeiten");
         var delete = Theme.MakeButton("Auswahl löschen");
+        var export = Theme.MakeButton("Export CSV");
+        export.Click += async (_, _) =>
+        {
+            using var dialog = new SaveFileDialog { Filter = "CSV (Excel)|*.csv", FileName = $"staff-{DateTime.Now:yyyy-MM-dd}.csv" };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            try
+            {
+                await File.WriteAllBytesAsync(dialog.FileName, await _api.DownloadCsvAsync(null, template: false, staff: true));
+            }
+            catch (Exception ex)
+            {
+                Theme.ShowError(this, ex);
+            }
+        };
         _search.Margin = new Padding(0, 2, 8, 0);
-        tools.Controls.AddRange(new Control[] { _search, refresh, add, edit, delete, _info });
+        tools.Controls.AddRange(new Control[] { _search, refresh, add, edit, delete, export, _info });
         if (!canWrite)
         {
             add.Enabled = edit.Enabled = delete.Enabled = false;

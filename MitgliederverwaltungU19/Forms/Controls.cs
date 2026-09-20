@@ -26,7 +26,7 @@ internal sealed class SideNavButton : Button
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
         Cursor = Cursors.Hand;
-        Height = 42;
+        Height = 38;
         Margin = new Padding(0, 1, 0, 1);
         TextAlign = ContentAlignment.MiddleLeft;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);

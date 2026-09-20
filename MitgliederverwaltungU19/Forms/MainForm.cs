@@ -18,7 +18,6 @@ public sealed class MainForm : Form
     private readonly List<Button> _writeButtons = new();
 
     private List<Member> _all = new();
-    private DeployForm? _deployForm;
     private readonly Panel _banner = new() { Dock = DockStyle.Top, Height = 40, BackColor = Color.FromArgb(0xFF, 0xF2, 0xE6), Visible = false };
     private readonly Label _bannerText = new() { AutoSize = true, Location = new Point(16, 11), Font = Theme.Bold };
     private readonly Button _showExpiry = Theme.MakeButton("Ablauf anzeigen");
@@ -49,7 +48,7 @@ public sealed class MainForm : Form
         BackColor = Theme.Background;
         StartPosition = FormStartPosition.CenterScreen;
         Size = new Size(1360, 800);
-        MinimumSize = new Size(1080, 600);
+        MinimumSize = new Size(1080, 760);
 
         BuildLayout();
         Shown += async (_, _) =>
@@ -88,6 +87,9 @@ public sealed class MainForm : Form
         var deleteAll = Theme.MakeButton("Alle löschen …");
         deleteAll.ForeColor = Theme.Danger;
         deleteAll.Enabled = _ping.CanWrite && _ping.Can("members.delete_all");
+        var link = Theme.MakeButton("Zugangslink …");
+        link.Enabled = _ping.CanWrite && _ping.Can("members.links");
+        link.Click += (_, _) => { if (SelectedMember() is { } m) { using var form = new MemberLinkForm(_api, m); form.ShowDialog(this); } };
 
         add.Click += async (_, _) => await OpenEditorAsync(null);
         export.Click += async (_, _) => await ExportAsync();
@@ -141,13 +143,17 @@ public sealed class MainForm : Form
         }
 
         Nav("Mitglieder", "", () => _grid.Focus(), active: true);
-        Nav("Staff", "", () => { using var form = new StaffForm(_api, _ping.CanWrite && _ping.Can("staff.edit")); form.ShowDialog(this); }).Enabled = _ping.Can("staff.view");
+        Nav("Staff", "", () => { using var form = new StaffForm(_api, _ping.CanWrite && _ping.Can("staff.edit")); form.ShowDialog(this); }).Visible = _ping.Can("staff.view");
         var import = Nav("Import …", "", async () => await OpenImportAsync());
-        import.Enabled = _ping.CanWrite && _ping.Can("members.import");
-        Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); }).Enabled = _ping.Can("members.export");
+        import.Visible = _ping.CanWrite && _ping.Can("members.import");
+        Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); }).Visible = _ping.Can("members.export");
         _navExpiry = Nav("Ablaufdaten", "", ShowExpiry);
         _navMissing = Nav("Dokumente fehlen", "", ShowMissing);
-        Nav("Benutzer & Rechte", "", () => { using var form = new UserAdminForm(_api); form.ShowDialog(this); }).Enabled = _ping.User is not null && _ping.Can("users.manage");
+        var signedIn = _ping.User is not null;
+        Nav("Camps", "", () => { using var form = new CampsForm(_api, _ping.Can("camps.delete")); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("camps.manage");
+        Nav("Feld-Rechte", "", () => { using var form = new FieldPermissionsForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("fields.manage");
+        Nav("Benutzer & Rechte", "", () => { using var form = new UserAdminForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("users.manage");
+        Nav("Protokoll", "", () => { using var form = new LogForm(_api, _ping.Can("logs.purge")); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("logs.view");
         Nav("Aktualisieren", "", async () => await ReloadAsync());
 
         // Unterer Bereich der Seitenleiste
@@ -164,25 +170,18 @@ public sealed class MainForm : Form
         var sep = new Panel { Height = 1, Width = 184, BackColor = Color.FromArgb(0x26, 0x2C, 0x4D), Margin = new Padding(20, 0, 20, 6) };
         bottom.Controls.Add(sep);
 
-        var deploy = new SideNavButton("Änderungen einspielen", "") { Width = 224, Enabled = _ping.CanWrite && _ping.Can("system.update") };
-        deploy.Click += (_, _) =>
+        var accountButton = new SideNavButton("Konto", "") { Width = 224, Enabled = signedIn };
+        accountButton.Click += (_, _) =>
         {
-            // Nicht-modal: Das Fenster darf für die Automatik geöffnet bleiben, während die App weiter benutzt wird
-            if (_deployForm is null || _deployForm.IsDisposed)
-            {
-                _deployForm = new DeployForm(_settings, _api);
-                _deployForm.Show(this);
-            }
-            else
-            {
-                _deployForm.Activate();
-            }
+            if (_ping.User is not { } who) return;
+            using var form = new AccountForm(_api, who.Username, who.Role);
+            form.ShowDialog(this);
         };
         var settingsButton = new SideNavButton("Einstellungen", "") { Width = 224 };
         settingsButton.Click += (_, _) => OpenSettings();
-        bottom.Controls.Add(deploy);
+        bottom.Controls.Add(accountButton);
         bottom.Controls.Add(settingsButton);
-        var logoutButton = new SideNavButton("Abmelden", "E7E8") { Width = 224, Enabled = _ping.User is not null };
+        var logoutButton = new SideNavButton("Abmelden", "") { Width = 224, Enabled = signedIn };
         logoutButton.Click += async (_, _) => await LogoutAsync();
         bottom.Controls.Add(logoutButton);
 
@@ -204,7 +203,9 @@ public sealed class MainForm : Form
             ForeColor = Theme.SidebarText,
             Margin = new Padding(20, 6, 0, 0),
             UseMnemonic = false,
-            Text = $"{_ping.TokenName}\n{(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}",
+            Text = _ping.User is { } who
+                ? $"{who.Username}\n{(who.Role == "administrator" ? "Administrator" : "Benutzer")} · {(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}"
+                : $"{_ping.TokenName}\n{(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}",
         };
         bottom.Controls.Add(account);
         bottom.Controls.Add(_licenseLabel);
@@ -250,9 +251,10 @@ public sealed class MainForm : Form
         // Filterzeile und Aktionen
         var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 52, WrapContents = false, Padding = new Padding(0, 6, 0, 0) };
         edit.Margin = new Padding(0, 0, 8, 0);
+        link.Margin = new Padding(0, 0, 8, 0);
         delete.Margin = new Padding(0, 0, 8, 0);
         deleteAll.Margin = new Padding(0, 0, 0, 0);
-        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, delete, deleteAll });
+        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, link, delete, deleteAll });
 
         // Tabelle in einer Karte mit feinem Rahmen
         _grid.Dock = DockStyle.Fill;

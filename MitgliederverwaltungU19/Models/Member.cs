@@ -16,6 +16,9 @@ public sealed class Member
     /// <summary>Fehlende Pflichtdokumente laut Server (nada, pass, ecard, rechte).</summary>
     public List<string> MissingDocuments { get; } = new();
 
+    /// <summary>Namen der weiteren Camps, an denen das Mitglied teilnimmt.</summary>
+    public HashSet<string> ExtraCamps { get; } = new();
+
     /// <summary>Von Hand mit "Fehlt" markierte Dokumente.</summary>
     public Dictionary<string, bool> MissingFlags { get; } = new();
 
@@ -56,6 +59,13 @@ public sealed class Member
             foreach (var d in docs.EnumerateObject())
             {
                 m.Documents[d.Name] = d.Value.ValueKind == JsonValueKind.True;
+            }
+        }
+        if (e.TryGetProperty("weitere_camps", out var extra) && extra.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var campEl in extra.EnumerateArray())
+            {
+                if (campEl.GetString() is { } campName) m.ExtraCamps.Add(campName);
             }
         }
         if (e.TryGetProperty("dokumente_fehlen", out var miss) && miss.ValueKind == JsonValueKind.Array)

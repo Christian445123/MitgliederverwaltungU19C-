@@ -60,6 +60,7 @@ public sealed class MemberForm : Form
         Controls.Add(bar);
 
         if (member is not null) FillFrom(member);
+        Shown += async (_, _) => await LoadCampsAsync();
         if (readOnly)
         {
             foreach (var c in _controls.Values) c.Enabled = false;
@@ -102,12 +103,45 @@ public sealed class MemberForm : Form
             table.Controls.Add(label);
             table.Controls.Add(input);
         }
+        if (group == Fields.GCamps) _campsTable = table;
         page.Controls.Add(table);
         if (group == Fields.GDoku)
         {
             page.Controls.Add(BuildDocumentsPanel());
         }
         return page;
+    }
+
+    // ── Weitere Camps (Ja/Nein je Camp, wie im Web-Formular) ────────────────
+    private TableLayoutPanel? _campsTable;
+    private readonly Dictionary<int, CheckBox> _campBoxes = new();
+
+    /// <summary>Lädt die zusätzlich angelegten Camps und zeigt je Camp ein Ja/Nein-Feld unter „Camps &amp; Zustimmung“.</summary>
+    private async Task LoadCampsAsync()
+    {
+        if (_campsTable is null) return;
+        try
+        {
+            var camps = await _api.GetCampListAsync();
+            foreach (var camp in camps)
+            {
+                var box = new CheckBox
+                {
+                    AutoSize = true,
+                    Text = "Ja",
+                    Margin = new Padding(0, 4, 0, 4),
+                    Checked = _member?.ExtraCamps.Contains(camp.Name) == true,
+                    Enabled = !_readOnly,
+                };
+                _campBoxes[camp.Id] = box;
+                _campsTable.Controls.Add(new Label { Text = camp.Name, AutoSize = true, Margin = new Padding(0, 9, 8, 0) });
+                _campsTable.Controls.Add(box);
+            }
+        }
+        catch (Exception)
+        {
+            // Server kennt "camps" noch nicht (alte Version): dann gibt es nur die festen Camps
+        }
     }
 
     // ── Dokumente (E-Card, Pass, NADA, Rechte & Pflichten) ─────────────────
@@ -335,7 +369,12 @@ public sealed class MemberForm : Form
         _save.Enabled = false;
         try
         {
-            await _api.SaveAsync(_member?.Id, Member.ToJson(values));
+            var payload = Member.ToJson(values);
+            foreach (var (campId, box) in _campBoxes)
+            {
+                payload[$"camp:{campId}"] = box.Checked; // weitere Camps
+            }
+            await _api.SaveAsync(_member?.Id, payload);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex)
