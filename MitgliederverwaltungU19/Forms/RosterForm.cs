@@ -127,6 +127,13 @@ public sealed class RosterForm : Form
 
     private void InitializeComponent()
     {
+        SuspendLayout();
+        // 
+        // RosterForm
+        // 
+        ClientSize = new Size(284, 261);
+        Name = "RosterForm";
+        ResumeLayout(false);
 
     }
 }
