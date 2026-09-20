@@ -147,6 +147,7 @@ public sealed class MainForm : Form
         Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); }).Enabled = _ping.Can("members.export");
         _navExpiry = Nav("Ablaufdaten", "", ShowExpiry);
         _navMissing = Nav("Dokumente fehlen", "", ShowMissing);
+        Nav("Benutzer & Rechte", "", () => { using var form = new UserAdminForm(_api); form.ShowDialog(this); }).Enabled = _ping.User is not null && _ping.Can("users.manage");
         Nav("Aktualisieren", "", async () => await ReloadAsync());
 
         // Unterer Bereich der Seitenleiste

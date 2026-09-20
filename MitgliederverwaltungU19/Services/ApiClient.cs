@@ -361,6 +361,97 @@ public sealed class ApiClient : IDisposable
         return (await response.Content.ReadAsByteArrayAsync(ct), ext);
     }
 
+    // ── Benutzer, Rollen und Rechte (Recht "users.manage", nur mit Benutzeranmeldung) ──
+
+    public async Task<List<PermissionDef>> GetPermissionsAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "admin/permissions", null, ct);
+        return doc.RootElement.GetProperty("permissions").EnumerateArray()
+            .Select(p => new PermissionDef(p.GetProperty("key").GetString() ?? "", p.GetProperty("label").GetString() ?? "", p.GetProperty("group").GetString() ?? ""))
+            .ToList();
+    }
+
+    private static List<RoleInfo> ParseRoles(JsonElement roles) => roles.EnumerateArray().Select(r => new RoleInfo(
+        r.GetProperty("id").GetInt32(),
+        r.TryGetProperty("key", out var k) && k.ValueKind == JsonValueKind.String ? k.GetString() ?? "" : "",
+        r.GetProperty("name").GetString() ?? "",
+        r.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "",
+        r.GetProperty("is_system").GetBoolean(),
+        r.GetProperty("users").GetInt32(),
+        r.GetProperty("permissions").EnumerateArray().Select(x => x.GetString() ?? "").ToHashSet())).ToList();
+
+    public async Task<List<RoleInfo>> GetRolesAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "admin/roles", null, ct);
+        return ParseRoles(doc.RootElement.GetProperty("roles"));
+    }
+
+    public async Task SaveRoleAsync(int? id, string name, string description, IEnumerable<string> permissions, CancellationToken ct = default)
+    {
+        var body = new JsonObject
+        {
+            ["name"] = name,
+            ["description"] = description,
+            ["permissions"] = new JsonArray(permissions.Select(p => (JsonNode?)JsonValue.Create(p)).ToArray()),
+        };
+        using var _ = id is null
+            ? await SendJsonAsync(HttpMethod.Post, "admin/roles", body, ct)
+            : await SendJsonAsync(HttpMethod.Put, $"admin/roles/{id}", body, ct);
+    }
+
+    public async Task DeleteRoleAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"admin/roles/{id}", null, ct);
+    }
+
+    public async Task<(List<UserRow> Users, int YouId, bool YouAreAdmin)> GetUsersAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "admin/users", null, ct);
+        var root = doc.RootElement;
+        var users = root.GetProperty("users").EnumerateArray().Select(u => new UserRow(
+            u.GetProperty("id").GetInt32(),
+            u.GetProperty("username").GetString() ?? "",
+            u.GetProperty("is_admin").GetBoolean(),
+            u.TryGetProperty("role_id", out var rid) && rid.ValueKind == JsonValueKind.Number ? rid.GetInt32() : null,
+            u.GetProperty("role_name").GetString() ?? "",
+            u.GetProperty("overrides").GetInt32(),
+            u.GetProperty("must_change_password").GetBoolean(),
+            u.GetProperty("created_at").GetString() ?? "")).ToList();
+        return (users, root.GetProperty("you").GetInt32(), root.GetProperty("you_are_admin").GetBoolean());
+    }
+
+    public async Task<UserDetail> GetUserAsync(int id, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, $"admin/users/{id}", null, ct);
+        var r = doc.RootElement;
+        var overrides = new Dictionary<string, string>();
+        if (r.TryGetProperty("overrides", out var o) && o.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in o.EnumerateObject()) overrides[p.Name] = p.Value.GetString() ?? "";
+        }
+        return new UserDetail(
+            r.GetProperty("id").GetInt32(),
+            r.GetProperty("username").GetString() ?? "",
+            r.GetProperty("is_admin").GetBoolean(),
+            r.TryGetProperty("role_id", out var rid) && rid.ValueKind == JsonValueKind.Number ? rid.GetInt32() : null,
+            overrides);
+    }
+
+    public async Task SaveUserAsync(int? id, string username, string password, int roleId, IReadOnlyDictionary<string, string> overrides, CancellationToken ct = default)
+    {
+        var ov = new JsonObject();
+        foreach (var (permission, choice) in overrides) ov[permission] = choice;
+        var body = new JsonObject { ["username"] = username, ["password"] = password, ["role_id"] = roleId, ["overrides"] = ov };
+        using var _ = id is null
+            ? await SendJsonAsync(HttpMethod.Post, "admin/users", body, ct)
+            : await SendJsonAsync(HttpMethod.Put, $"admin/users/{id}", body, ct);
+    }
+
+    public async Task DeleteUserAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"admin/users/{id}", null, ct);
+    }
+
     /// <summary>Setzt oder entfernt die "Fehlt"-Markierung eines Pflichtdokuments (nada, pass, ecard, rechte).</summary>
     public async Task SetDocumentFlagAsync(int memberId, string type, bool missing, CancellationToken ct = default)
     {
