@@ -10,8 +10,8 @@ public sealed class MainForm : Form
     private readonly PingResult _ping;
 
     private readonly TextBox _search = new() { Width = 240, PlaceholderText = "Suche: Name, E-Mail, Verein, Jersey Nr." };
-    private readonly ComboBox _statusFilter = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _kaderFilter = new() { Width = 190, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _statusFilter = new() { Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _kaderFilter = new() { Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly DataGridView _grid = new();
     private readonly Label _stats = new() { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(12, 8, 0, 0) };
     private readonly Label _footer = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft };
@@ -74,11 +74,11 @@ public sealed class MainForm : Form
         _kaderFilter.SelectedIndex = 0;
         _kaderFilter.SelectedIndexChanged += (_, _) => ApplyFilter();
         _search.TextChanged += (_, _) => ApplyFilter();
-        _search.Width = 300;
+        _search.Width = 230;
         _search.PlaceholderText = "Suche: Name, E-Mail, Verein, Jersey Nr.";
         _search.Margin = new Padding(0, 4, 10, 0);
         _statusFilter.Margin = new Padding(0, 4, 10, 0);
-        _kaderFilter.Margin = new Padding(0, 4, 18, 0);
+        _kaderFilter.Margin = new Padding(0, 4, 12, 0);
 
         var add = Theme.MakeButton("+ Neues Mitglied", primary: true);
         var export = Theme.MakeButton("Export CSV");
@@ -154,7 +154,6 @@ public sealed class MainForm : Form
         Nav("Feld-Rechte", "", () => { using var form = new FieldPermissionsForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("fields.manage");
         Nav("Benutzer & Rechte", "", () => { using var form = new UserAdminForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("users.manage");
         Nav("Protokoll", "", () => { using var form = new LogForm(_api, _ping.Can("logs.purge")); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("logs.view");
-        Nav("Aktualisieren", "", async () => await ReloadAsync());
 
         // Unterer Bereich der Seitenleiste
         var bottom = new FlowLayoutPanel
@@ -204,7 +203,7 @@ public sealed class MainForm : Form
             Margin = new Padding(20, 6, 0, 0),
             UseMnemonic = false,
             Text = _ping.User is { } who
-                ? $"{who.Username}\n{(who.Role == "administrator" ? "Administrator" : "Benutzer")} · {(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}"
+                ? $"{who.Username}\n{(who.Role == "administrator" ? "Administrator" : "Benutzer")}{(_ping.CanWrite ? "" : " · nur Lesen")}"
                 : $"{_ping.TokenName}\n{(_ping.CanWrite ? "Lesen & Schreiben" : "nur Lesen")}",
         };
         bottom.Controls.Add(account);
@@ -233,6 +232,10 @@ public sealed class MainForm : Form
         export.Margin = new Padding(0, 0, 10, 0);
         titleActions.Controls.Add(add);
         titleActions.Controls.Add(export);
+        var refreshButton = Theme.MakeButton("Aktualisieren");
+        refreshButton.Margin = new Padding(0, 0, 10, 0);
+        refreshButton.Click += async (_, _) => await ReloadAsync();
+        titleActions.Controls.Add(refreshButton);
         titleRow.Controls.Add(title);
         titleRow.Controls.Add(titleActions);
 
