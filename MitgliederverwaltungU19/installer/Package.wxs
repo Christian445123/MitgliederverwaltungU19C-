@@ -28,10 +28,43 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Mitgliederverwaltung U19 jetzt starten" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <CustomAction Id="LaunchApp" FileRef="AppExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
+    <!-- Zugangsdaten, die bei der Installation abgefragt werden (auch per Befehlszeile: msiexec /i ... API_URL=... API_KEY=... LICENSE_KEY=...) -->
+    <Property Id="API_URL" Value="https://mitgliedverwaltung.gamingcommunity.at/api" Secure="yes" />
+    <Property Id="API_KEY" Secure="yes" Hidden="yes" />
+    <Property Id="LICENSE_KEY" Secure="yes" Hidden="yes" />
+
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2" Condition="NOT Installed" />
       <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2" Condition="NOT Installed" />
+      <!-- Ablauf: Zielordner -> Zugangsdaten -> Installieren -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ConfigDlg" Order="5"
+               Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg" Order="3" Condition="NOT Installed" />
+
+      <Dialog Id="ConfigDlg" Width="370" Height="270" Title="Zugangsdaten - Mitgliederverwaltung U19">
+        <Control Id="Title" Type="Text" X="15" Y="8" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Zugangsdaten" />
+        <Control Id="Desc" Type="Text" X="15" Y="30" Width="340" Height="36" Transparent="yes" NoPrefix="yes"
+                 Text="Bitte die Adresse der Web-Anwendung, den API-Schlüssel und den Lizenzschlüssel eingeben. Beides erstellt ein Administrator im Web-Bereich unter „API-Zugang“ bzw. „Lizenzen“." />
+        <Control Id="UrlLabel" Type="Text" X="15" Y="78" Width="340" Height="12" Transparent="yes" NoPrefix="yes" Text="API-Adresse" />
+        <Control Id="UrlEdit" Type="Edit" X="15" Y="92" Width="340" Height="15" Property="API_URL" Text="{200}" />
+        <Control Id="KeyLabel" Type="Text" X="15" Y="118" Width="340" Height="12" Transparent="yes" NoPrefix="yes" Text="API-Schlüssel" />
+        <Control Id="KeyEdit" Type="Edit" X="15" Y="132" Width="340" Height="15" Property="API_KEY" Password="yes" Text="{200}" />
+        <Control Id="LicLabel" Type="Text" X="15" Y="158" Width="340" Height="12" Transparent="yes" NoPrefix="yes" Text="Lizenzschlüssel (U19-XXXX-XXXX-XXXX-XXXX)" />
+        <Control Id="LicEdit" Type="Edit" X="15" Y="172" Width="340" Height="15" Property="LICENSE_KEY" Text="{60}" />
+        <Control Id="Hint" Type="Text" X="15" Y="198" Width="340" Height="24" Transparent="yes" NoPrefix="yes"
+                 Text="Alle drei Felder sind Pflicht. Die Angaben werden beim ersten Start der Anwendung übernommen und lassen sich später unter Einstellungen ändern." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="InstallDirDlg" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" DisableCondition="NOT API_URL OR NOT API_KEY OR NOT LICENSE_KEY" EnableCondition="API_URL AND API_KEY AND LICENSE_KEY">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApp"
                Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
     </UI>
@@ -47,7 +80,21 @@
     <Feature Id="Main" Title="Mitgliederverwaltung U19" Level="1" ConfigurableDirectory="INSTALLFOLDER">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentGroupRef Id="Shortcuts" />
+      <ComponentGroupRef Id="SetupValues" />
     </Feature>
+
+    <!-- Die Anwendung übernimmt diese Werte beim ersten Start in ihre (pro Benutzer verschlüsselten) Einstellungen
+         und entfernt danach den API- und Lizenzschlüssel aus der Registry (soweit sie das darf). -->
+    <ComponentGroup Id="SetupValues">
+      <Component Id="SetupRegistryComponent" Directory="INSTALLFOLDER" Guid="*" Bitness="always64" Condition="API_KEY AND LICENSE_KEY">
+        <RegistryKey Root="HKLM" Key="Software\AFBOE U19\Mitgliederverwaltung\Setup">
+          <RegistryValue Name="ApiUrl" Type="string" Value="[API_URL]" KeyPath="yes" />
+          <RegistryValue Name="ApiKey" Type="string" Value="[API_KEY]" />
+          <RegistryValue Name="LicenseKey" Type="string" Value="[LICENSE_KEY]" />
+          <RegistryValue Name="Stamp" Type="string" Value="[Date] [Time]" />
+        </RegistryKey>
+      </Component>
+    </ComponentGroup>
 
     <!-- Alle Programmdateien (Anwendung, .NET-Laufzeit, Bibliotheken) kommen in den Programmordner -->
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">

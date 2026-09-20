@@ -78,6 +78,9 @@ public sealed class AppSettings
     /// <summary>Beginn der automatischen Offline-Lizenz (Unix-Sekunden, 0 = nicht aktiv). Gilt höchstens 3 Tage.</summary>
     public long LicenseOfflineSince { get; set; }
 
+    /// <summary>Zeitstempel der zuletzt übernommenen Installer-Eingaben (siehe SetupImport).</summary>
+    public string SetupStamp { get; set; } = "";
+
     // ── Programm-Updates (GitHub Releases) ─────────────────────────────────
 
     /// <summary>GitHub-Repository der Anwendung im Format "Besitzer/Repository".</summary>

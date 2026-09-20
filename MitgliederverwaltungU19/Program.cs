@@ -11,6 +11,7 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         Application.SetDefaultFont(Theme.Body);
         var settings = AppSettings.Load();
+        SetupImport.Apply(settings); // Zugangsdaten aus dem Installer übernehmen (nur wenn neu eingegeben)
 
         while (true)
         {
