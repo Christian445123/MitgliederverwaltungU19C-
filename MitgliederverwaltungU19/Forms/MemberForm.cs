@@ -180,7 +180,7 @@ public sealed class MemberForm : Form
             var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
             buttons.Controls.AddRange(new Control[] { open, upload, remove });
 
-            // "Fehlt"-Haken für die Pflichtdokumente (nicht für die Rückseiten)
+            // "Fehlt"-Haken für die Pflichtdokumente
             if (key is "ecard" or "pass" or "nada" or "rechte")
             {
                 var missing = new CheckBox

@@ -26,7 +26,7 @@ public sealed class MissingDocsForm : Form
             Padding = new Padding(14, 12, 14, 0),
             ForeColor = Theme.Muted,
             Text = "Ein Dokument fehlt, wenn keine Datei hochgeladen ist oder es mit „Fehlt“ markiert wurde. " +
-                   "Bei E-Card und Reisepass genügt Vorder- oder Rückseite.",
+                   "E-Card und Reisepass haben nur eine Vorderseite.",
         };
 
         // Register Spieler
@@ -43,21 +43,19 @@ public sealed class MissingDocsForm : Form
             Mark(players, players.Rows.Add(cells.ToArray()));
         }
 
-        // Register Staff: nur Personen aus dem Staff. Rechte & Pflichten und Foto des Reisepasses sind freiwillig,
+        // Register Staff: nur Personen aus dem Staff. Rechte & Pflichten, Reisepass und E-Card sind freiwillig,
         // deshalb steht dort „nicht hochgeladen“ (Hinweis) und nicht „fehlt“.
-        var staffGrid = RosterDownload.BuildGrid(("Name", 34), ("Position", 16), ("Rechte & Pflichten (freiwillig)", 25), ("Foto Reisepass (freiwillig)", 25));
+        var staffGrid = RosterDownload.BuildGrid(("Name", 28), ("Position", 12), ("Rechte & Pflichten", 20), ("Reisepass", 20), ("E-Card", 20));
+        static bool Has(Dictionary<string, string?> s, string type) => RosterDownload.StaffValue(s, "dokument_" + type) == "true";
         var staffOpen = staff
-            .Where(s => RosterDownload.StaffValue(s, "status") != "inaktiv"
-                        && (RosterDownload.StaffValue(s, "dokument_rechte") != "true"
-                            || (RosterDownload.StaffValue(s, "dokument_pass") != "true" && RosterDownload.StaffValue(s, "dokument_pass_back") != "true")))
+            .Where(s => RosterDownload.StaffValue(s, "status") != "inaktiv" && (!Has(s, "rechte") || !Has(s, "pass") || !Has(s, "ecard")))
             .OrderBy(s => RosterDownload.StaffName(s), StringComparer.CurrentCultureIgnoreCase)
             .ToList();
         foreach (var s in staffOpen)
         {
-            var noRechte = RosterDownload.StaffValue(s, "dokument_rechte") != "true";
-            var noPass = RosterDownload.StaffValue(s, "dokument_pass") != "true" && RosterDownload.StaffValue(s, "dokument_pass_back") != "true";
-            var i = staffGrid.Rows.Add(RosterDownload.StaffName(s), RosterDownload.StaffValue(s, "position"), noRechte ? "nicht hochgeladen" : "✓", noPass ? "nicht hochgeladen" : "✓");
-            for (var c = 2; c <= 3; c++)
+            var i = staffGrid.Rows.Add(RosterDownload.StaffName(s), RosterDownload.StaffValue(s, "position"),
+                Has(s, "rechte") ? "✓" : "nicht hochgeladen", Has(s, "pass") ? "✓" : "nicht hochgeladen", Has(s, "ecard") ? "✓" : "nicht hochgeladen");
+            for (var c = 2; c <= 4; c++)
             {
                 var cell = staffGrid.Rows[i].Cells[c];
                 var open = cell.Value?.ToString() != "✓";

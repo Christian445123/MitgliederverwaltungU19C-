@@ -17,8 +17,8 @@ internal sealed class StaffEditDialog : Form
     private static readonly (string Type, string Caption)[] DocumentTypes =
     {
         ("rechte", "Rechte & Pflichten (unterschrieben, freiwillig)"),
-        ("pass", "Foto Reisepass Vorderseite (freiwillig)"),
-        ("pass_back", "Foto Reisepass Rückseite (freiwillig)"),
+        ("pass", "Reisepass (Foto, freiwillig)"),
+        ("ecard", "E-Card (freiwillig)"),
     };
 
     /// <summary>Neu gewählte Dateien je Dokumenttyp (werden nach dem Speichern hochgeladen).</summary>
@@ -87,7 +87,7 @@ internal sealed class StaffEditDialog : Form
         table.Controls.Add(new Label { Text = "Status", AutoSize = true, Margin = new Padding(0, 8, 8, 0) });
         table.Controls.Add(_status);
 
-        // Freiwillige Dokumente: Rechte & Pflichten (unterschrieben) sowie Foto des Reisepasses (Vorder-/Rückseite)
+        // Freiwillige Dokumente: Rechte & Pflichten (unterschrieben), Reisepass (Foto) und E-Card (jeweils nur Vorderseite)
         foreach (var (type, caption) in DocumentTypes)
         {
             var present0 = row is not null && row.TryGetValue("dokument_" + type, out var flag) && flag == "true";

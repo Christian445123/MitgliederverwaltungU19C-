@@ -20,6 +20,7 @@ public sealed class StaffPanel : UserControl
         ("telefon", "Telefon", false, false, false),
         ("email", "Mail", false, false, false),
         ("telefon_angehoeriger", "Telefonnummer Angehörige", false, false, false),
+        ("sozialversicherungsnummer", "Sozial Ver. Nr.", false, false, false),
         ("reisepass_nr", "Reisepass Nr", false, false, false),
         ("reisepass_ausgestellt_am", "Reisepass ausgestellt am", true, false, false),
         ("reisepass_gueltig_bis", "Reisepass gültig bis", true, false, false),
