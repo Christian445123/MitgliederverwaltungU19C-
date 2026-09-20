@@ -117,17 +117,9 @@ public sealed class MainForm : Form
         // ── Seitenleiste ──────────────────────────────────────────────────
         var sidebar = new Panel { Dock = DockStyle.Left, Width = 240, BackColor = Theme.Navy };
 
-        var brand = new Panel { Dock = DockStyle.Top, Height = 110, BackColor = Theme.Navy };
-        var mark = new LogoPill { Size = new Size(200, 68), Location = new Point(20, 10) };
-        var brandText = new Label
-        {
-            Text = "U19 Verwaltung",
-            Font = Theme.Bold,
-            ForeColor = Theme.SidebarText,
-            AutoSize = true,
-            Location = new Point(22, 84),
-        };
-        brand.Controls.AddRange(new Control[] { mark, brandText });
+        var brand = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = Theme.Navy };
+        var mark = new LogoPill { Size = new Size(200, 70), Location = new Point(20, 12) };
+        brand.Controls.Add(mark);
 
         var nav = new FlowLayoutPanel
         {

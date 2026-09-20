@@ -50,6 +50,9 @@ public static class Theme
 
     public static readonly Font Body = new(FontFamily(), 10f * Zoom);
     public static readonly Font Bold = new(FontFamily(), 10f * Zoom, FontStyle.Bold);
+    /// <summary>Etwas größere Schrift für Tabellen (bessere Lesbarkeit der Listen).</summary>
+    public static readonly Font GridFont = new(FontFamily(), 11f * Zoom);
+    public static readonly Font GridHeaderFont = new(FontFamily(), 10.5f * Zoom, FontStyle.Bold);
     public static readonly Font Title = new(FontFamily(), 15f * Zoom, FontStyle.Bold);
 
     /// <summary>AFBÖ-Logo (als Ressource in der Anwendung), oder null.</summary>
@@ -148,11 +151,11 @@ public static class Theme
         g.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(0x4B, 0x52, 0x63);
         g.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(0xF3, 0xF4, 0xF8);
         g.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.FromArgb(0x4B, 0x52, 0x63);
-        g.ColumnHeadersDefaultCellStyle.Font = Bold;
+        g.ColumnHeadersDefaultCellStyle.Font = GridHeaderFont;
         g.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 4, 0);
         g.DefaultCellStyle.BackColor = Color.White;
         g.DefaultCellStyle.ForeColor = Ink;
-        g.DefaultCellStyle.Font = Body;
+        g.DefaultCellStyle.Font = GridFont;
         g.DefaultCellStyle.Padding = new Padding(8, 0, 4, 0);
         g.DefaultCellStyle.SelectionBackColor = Color.FromArgb(0xFF, 0xEC, 0xD9);
         g.DefaultCellStyle.SelectionForeColor = Ink;
@@ -246,8 +249,8 @@ public static class Theme
         if (target != form.ClientSize) form.ClientSize = target;
     }
 
-    public const int GridRowHeight = 38;
-    public const int GridHeaderHeight = 40;
+    public const int GridRowHeight = 44;
+    public const int GridHeaderHeight = 46;
 
     /// <summary>Zeilen- und Kopfhöhe aller Tabellen im Fenster an den Zoom anpassen (die Standard-Skalierung erfasst sie nicht zuverlässig).</summary>
     private static void ApplyGridMetrics(Control root)
@@ -275,7 +278,7 @@ public static class Theme
         if (g.Width <= 0 || g.Columns.Count == 0) return;
         var available = g.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
         int Need() => g.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible)
-            .Sum(c => c.Name == "link" ? Math.Max(c.Width, Px(110)) : Px(wishWidths.TryGetValue(c.Name, out var w) ? w : 100));
+            .Sum(c => c.Name == "link" ? Math.Max(c.Width, Px(110)) : Px((int)((wishWidths.TryGetValue(c.Name, out var w) ? w : 100) * 1.1)));
 
         foreach (DataGridViewColumn c in g.Columns) c.Visible = true;
         foreach (var name in hideOrder)
@@ -352,7 +355,7 @@ public static class Theme
         col.DefaultCellStyle.ForeColor = AccentDark;
         col.DefaultCellStyle.SelectionBackColor = AccentSoft;
         col.DefaultCellStyle.SelectionForeColor = AccentDark;
-        col.DefaultCellStyle.Font = Bold;
+        col.DefaultCellStyle.Font = GridHeaderFont;
         col.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
         return col;
     }
