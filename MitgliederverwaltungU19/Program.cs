@@ -25,6 +25,7 @@ internal static class Program
                 var api = new ApiClient(settings);
                 // Task.Run: kein Deadlock, auch wenn bereits ein UI-Kontext existiert
                 var ping = Task.Run(() => api.PingAsync()).GetAwaiter().GetResult();
+                if (!RunLicenseGate(settings, api)) return;
                 Application.Run(new MainForm(settings, api, ping));
                 return;
             }
@@ -39,5 +40,21 @@ internal static class Program
                 if (form.ShowDialog() != DialogResult.OK) return;
             }
         }
+    }
+
+    /// <summary>
+    /// Ohne gültigen Lizenzschlüssel startet die Anwendung nicht: prüft beim Server und fragt bei Bedarf nach dem Schlüssel.
+    /// </summary>
+    private static bool RunLicenseGate(AppSettings settings, ApiClient api)
+    {
+        var check = Task.Run(() => LicenseService.CheckAsync(settings, api)).GetAwaiter().GetResult();
+        while (!check.Allowed)
+        {
+            var message = check.Status == LicenseStatus.NoKey ? "" : check.Message;
+            using var form = new LicenseForm(settings, api, message, mustActivate: true);
+            if (form.ShowDialog() != DialogResult.OK) return false;
+            check = Task.Run(() => LicenseService.CheckAsync(settings, api)).GetAwaiter().GetResult();
+        }
+        return true;
     }
 }

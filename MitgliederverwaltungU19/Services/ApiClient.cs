@@ -248,6 +248,14 @@ public sealed class ApiClient : IDisposable
         return JsonSerializer.Deserialize<ImportResponse>(body, ImportJson) ?? throw new ApiException("Leere Antwort vom Server.");
     }
 
+    /// <summary>Fragt den Server, ob der Lizenzschlüssel für dieses Gerät gilt (POST license/validate).</summary>
+    public async Task<LicenseResponse> ValidateLicenseAsync(string key, string machineId, string machineName, string appVersion, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["key"] = key, ["machine_id"] = machineId, ["machine_name"] = machineName, ["app_version"] = appVersion };
+        using var doc = await SendJsonAsync(HttpMethod.Post, "license/validate", body, ct);
+        return LicenseResponse.FromJson(doc.RootElement);
+    }
+
     /// <summary>Löst auf dem Server ein git pull aus. Liefert Erfolg und das Protokoll.</summary>
     public async Task<(bool Success, string Log)> UpdateServerAsync(CancellationToken ct = default)
     {

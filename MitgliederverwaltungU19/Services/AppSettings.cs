@@ -38,6 +38,43 @@ public sealed class AppSettings
             : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
     }
 
+    // ── Lizenz ─────────────────────────────────────────────────────────────
+
+    public string LicenseKeyProtected { get; set; } = "";
+
+    /// <summary>Lizenzschlüssel (aus dem Web-Bereich „Lizenzen“), per DPAPI geschützt gespeichert.</summary>
+    [JsonIgnore]
+    public string LicenseKey
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(LicenseKeyProtected)) return "";
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(LicenseKeyProtected), null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch (Exception)
+            {
+                return "";
+            }
+        }
+        set => LicenseKeyProtected = string.IsNullOrEmpty(value)
+            ? ""
+            : Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser));
+    }
+
+    /// <summary>Zuletzt vom Server signierte Offline-Freigabe (höchstens 3 Tage gültig).</summary>
+    public LicenseLease? LicenseLease { get; set; }
+
+    /// <summary>Öffentlicher Schlüssel des Servers zur Prüfung der Signatur (PEM).</summary>
+    public string LicensePublicKey { get; set; } = "";
+
+    public string LicenseName { get; set; } = "";
+
+    /// <summary>Spätester bekannter Zeitpunkt (Unix-Sekunden), um zurückgestellte Systemuhren zu erkennen.</summary>
+    public long LicenseLastSeen { get; set; }
+
     // ── Programm-Updates (GitHub Releases) ─────────────────────────────────
 
     /// <summary>GitHub-Repository der Anwendung im Format "Besitzer/Repository".</summary>
@@ -73,7 +110,10 @@ public sealed class AppSettings
     [JsonIgnore]
     public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl) && !string.IsNullOrEmpty(Token);
 
-    private static string FilePath => Path.Combine(
+    /// <summary>Nur für Tests: anderer Speicherort statt %APPDATA%.</summary>
+    public static string? PathOverride { get; set; }
+
+    private static string FilePath => PathOverride ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MitgliederverwaltungU19", "settings.json");
 
     public static AppSettings Load()

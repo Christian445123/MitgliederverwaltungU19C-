@@ -26,6 +26,9 @@ public sealed class MainForm : Form
     private bool _expiryAnnounced;
     private readonly Button _updateButton = Theme.MakeButton("", primary: true);
     private UpdateInfo? _update;
+    private readonly System.Windows.Forms.Timer _licenseTimer = new() { Interval = 10 * 60 * 1000 };
+    private readonly Label _licenseLabel = new() { Dock = DockStyle.Right, Width = 430, TextAlign = ContentAlignment.MiddleRight, ForeColor = Theme.Muted };
+    private bool _licenseBusy;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
     {
@@ -44,6 +47,9 @@ public sealed class MainForm : Form
         BuildLayout();
         Shown += async (_, _) =>
         {
+            _licenseTimer.Tick += async (_, _) => await CheckLicenseAsync();
+            _licenseTimer.Start();
+            await CheckLicenseAsync();
             await ReloadAsync();
             await CheckForUpdateAsync();
         };
@@ -188,6 +194,7 @@ public sealed class MainForm : Form
         _banner.Controls.Add(_showMissing);
         _banner.Controls.Add(_bannerText);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 30, Padding = new Padding(14, 0, 14, 0), BackColor = Color.White };
+        footer.Controls.Add(_licenseLabel);
         footer.Controls.Add(_footer);
         tools.Controls.Add(_stats);
 
@@ -489,6 +496,57 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Theme.ShowError(this, ex);
+        }
+    }
+
+    /// <summary>
+    /// Prüft die Lizenz beim Server (beim Start und danach alle 10 Minuten). Ohne Verbindung läuft die Anwendung mit der
+    /// signierten Offline-Freigabe höchstens 3 Tage weiter; danach oder bei gesperrter Lizenz ist die Anwendung gesperrt.
+    /// </summary>
+    private async Task CheckLicenseAsync()
+    {
+        if (_licenseBusy) return;
+        _licenseBusy = true;
+        try
+        {
+            var result = await LicenseService.CheckAsync(_settings, _api);
+            switch (result.Status)
+            {
+                case LicenseStatus.Valid:
+                    _licenseLabel.Text = "🔑 Lizenz aktiv" + (string.IsNullOrEmpty(_settings.LicenseName) ? "" : " – " + _settings.LicenseName);
+                    _licenseLabel.ForeColor = Theme.Green;
+                    break;
+                case LicenseStatus.OfflineGrace:
+                    _licenseLabel.Text = "⚠ Lizenzserver offline – " + result.Message;
+                    _licenseLabel.ForeColor = Theme.AccentDark;
+                    break;
+                default:
+                    _licenseTimer.Stop();
+                    _licenseLabel.Text = "Lizenz nicht gültig";
+                    _licenseLabel.ForeColor = Theme.Danger;
+                    using (var form = new LicenseForm(_settings, _api, result.Message, mustActivate: true))
+                    {
+                        if (form.ShowDialog(this) == DialogResult.OK)
+                        {
+                            _licenseLabel.Text = "🔑 Lizenz aktiv";
+                            _licenseLabel.ForeColor = Theme.Green;
+                            _licenseTimer.Start();
+                        }
+                        else
+                        {
+                            Environment.Exit(0); // ohne gültige Lizenz keine Nutzung
+                        }
+                    }
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // unerwarteter Fehler: beim nächsten Durchlauf erneut versuchen
+        }
+        finally
+        {
+            _licenseBusy = false;
         }
     }
 

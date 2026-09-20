@@ -79,7 +79,32 @@ public sealed class SettingsForm : Form
                 Margin = new Padding(0, 22, 0, 4),
             });
             layout.Controls.Add(updates);
-            ClientSize = new Size(480, 440);
+
+            // Lizenz
+            var license = Theme.MakeButton("Lizenzschlüssel ändern …");
+            var licenseInfo = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(440, 0),
+                ForeColor = Theme.Muted,
+                Text = string.IsNullOrEmpty(settings.LicenseKey)
+                    ? "Kein Lizenzschlüssel hinterlegt."
+                    : $"Schlüssel {LicenseService.MaskKey(settings.LicenseKey)}" + (string.IsNullOrEmpty(settings.LicenseName) ? "" : $" ({settings.LicenseName})"),
+            };
+            license.Click += async (_, _) =>
+            {
+                using var api = new ApiClient(_settings);
+                using var form = new LicenseForm(_settings, api, "", mustActivate: false);
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    licenseInfo.Text = $"Schlüssel {LicenseService.MaskKey(_settings.LicenseKey)}" + (string.IsNullOrEmpty(_settings.LicenseName) ? "" : $" ({_settings.LicenseName})");
+                }
+                await Task.CompletedTask;
+            };
+            layout.Controls.Add(new Label { Text = "Lizenz", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 22, 0, 4) });
+            layout.Controls.Add(licenseInfo);
+            layout.Controls.Add(license);
+            ClientSize = new Size(480, 580);
         }
         Controls.Add(layout);
     }
