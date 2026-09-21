@@ -1,0 +1,30 @@
+#!/bin/sh
+# Nach jedem Commit, der Programmdateien aendert: Push, Installer bauen lassen (GitHub), veroeffentlichen
+# und die MSI nach installer/output laden - automatisch im Hintergrund (siehe installer/hole-installer.ps1).
+# Einmalig pro Klon aktivieren:  git config core.hooksPath .githooks
+# Abschalten fuer einen Commit:  U19_NO_AUTORELEASE=1 git commit ...
+
+[ -n "$U19_NO_AUTORELEASE" ] && exit 0
+[ "$(git rev-parse --abbrev-ref HEAD)" = "master" ] || exit 0
+
+# Nur wenn der Commit Programmdateien aendert (wie der Pfadfilter des Workflows)
+git diff-tree --no-commit-id --name-only -r HEAD | grep '^MitgliederverwaltungU19/' | grep -qv '^MitgliederverwaltungU19/installer/README.txt$' || exit 0
+
+top=$(git rev-parse --show-toplevel)
+gitdir=$(git rev-parse --git-dir)
+lock="$gitdir/u19-release.lock"
+log="$gitdir/u19-release.log"
+
+# Laeuft schon ein Ablauf (Lock juenger als 30 Minuten), wird dieser Commit beim naechsten Ablauf mitgeschickt
+if [ -f "$lock" ] && [ -z "$(find "$lock" -mmin +30 2>/dev/null)" ]; then
+    echo "[Release] Ein Release-Ablauf laeuft bereits - dieser Commit wird beim naechsten Ablauf mitgeschickt."
+    exit 0
+fi
+echo $$ > "$lock"
+
+echo "[Release] Installer wird im Hintergrund gebaut und veroeffentlicht. Fortschritt: $log"
+(
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$top/MitgliederverwaltungU19/installer/hole-installer.ps1" -Push > "$log" 2>&1
+    rm -f "$lock"
+) > /dev/null 2>&1 &
+exit 0

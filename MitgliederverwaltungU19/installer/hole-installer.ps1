@@ -21,7 +21,7 @@ $startRelease = $null
 try { $startRelease = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ 'User-Agent' = 'U19' }).tag_name } catch {}
 
 if ($Push) {
-    git -C $repoDir pull --rebase origin master
+    git -C $repoDir pull --rebase --autostash origin master
     if ($LASTEXITCODE -ne 0) { throw 'git pull --rebase fehlgeschlagen.' }
     git -C $repoDir push origin HEAD
     if ($LASTEXITCODE -ne 0) { throw 'git push fehlgeschlagen.' }
@@ -44,4 +44,4 @@ $ziel = Join-Path $outDir $asset.name
 Invoke-WebRequest $asset.browser_download_url -OutFile $ziel -Headers @{ 'User-Agent' = 'U19' }
 Write-Host "Fertig: $ziel" -ForegroundColor Green
 Write-Host "`n$($rel.body)"
-git -C $repoDir pull --rebase origin master | Out-Null
+git -C $repoDir pull --rebase --autostash origin master | Out-Null
