@@ -21,6 +21,8 @@ $startRelease = $null
 try { $startRelease = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ 'User-Agent' = 'U19' }).tag_name } catch {}
 
 if ($Push) {
+    git -C $repoDir pull --rebase origin master
+    if ($LASTEXITCODE -ne 0) { throw 'git pull --rebase fehlgeschlagen.' }
     git -C $repoDir push origin HEAD
     if ($LASTEXITCODE -ne 0) { throw 'git push fehlgeschlagen.' }
     Write-Host "Warte auf das neue Release (bisher: $startRelease) ..." -ForegroundColor Cyan
