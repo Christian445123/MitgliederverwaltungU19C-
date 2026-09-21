@@ -11,6 +11,7 @@ on:
     branches: [master]
     paths:
       - 'MitgliederverwaltungU19/**'
+      - '.github/workflows/release.yml'
       - '!MitgliederverwaltungU19/installer/README.txt'
       - '!MitgliederverwaltungU19/installer/output/**'
   workflow_dispatch:
