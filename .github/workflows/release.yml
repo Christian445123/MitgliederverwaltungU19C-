@@ -70,11 +70,24 @@ jobs:
         shell: pwsh
         run: ./MitgliederverwaltungU19/installer/build-installer.ps1
 
+      - name: Changelog erstellen
+        shell: pwsh
+        run: |
+          # Änderungen seit dem letzten Release: Commit-Nachrichten (ohne automatische Versions-Commits)
+          $prev = git describe --tags --abbrev=0 2>$null
+          $range = if ($prev) { "$prev..HEAD" } else { 'HEAD' }
+          $lines = git log $range --no-merges --pretty=format:'%s' | Where-Object { $_ -and $_ -notmatch '\[skip ci\]' }
+          $body = @('## Änderungen', '')
+          if ($lines) { $body += $lines | ForEach-Object { "- $_" } } else { $body += '- Interne Verbesserungen' }
+          if ($prev) { $body += ''; $body += "Vorherige Version: $prev" }
+          $body | Set-Content changelog.md -Encoding UTF8
+          Get-Content changelog.md
+
       - name: Release veröffentlichen
         shell: pwsh
         run: |
           $v = '${{ steps.ver.outputs.version }}'
           $msi = "MitgliederverwaltungU19/installer/output/MitgliederverwaltungU19-$v-x64.msi"
           if (-not (Test-Path $msi)) { throw "Installer nicht gefunden: $msi" }
-          gh release create "v$v" $msi --title "Version $v" --generate-notes --target '${{ steps.ver.outputs.sha }}'
+          gh release create "v$v" $msi --title "Version $v" --notes-file changelog.md --target '${{ steps.ver.outputs.sha }}'
           if ($LASTEXITCODE -ne 0) { throw 'Release konnte nicht erstellt werden.' }
