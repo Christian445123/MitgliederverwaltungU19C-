@@ -1,0 +1,79 @@
+# Baut nach jeder Programmänderung auf master automatisch den MSI-Installer und veröffentlicht ihn als GitHub-Release
+# (die installierten Anwendungen aktualisieren sich darüber selbst).
+#
+# Ist die <Version> in der .csproj schon veröffentlicht, wird die Patch-Nummer automatisch erhöht
+# (2.17.0 -> 2.17.1) und als eigener Commit "[skip ci]" zurückgeschrieben. Wer eine größere Version will,
+# erhöht sie einfach selbst in der .csproj (z. B. 2.18.0) - die wird dann unverändert verwendet.
+name: MSI bauen und veröffentlichen
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'MitgliederverwaltungU19/**'
+      - '!MitgliederverwaltungU19/installer/README.txt'
+      - '!MitgliederverwaltungU19/installer/output/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version festlegen (bei Bedarf Patch erhöhen)
+        id: ver
+        shell: pwsh
+        run: |
+          $csproj = 'MitgliederverwaltungU19/MitgliederverwaltungU19.csproj'
+          $text = Get-Content $csproj -Raw -Encoding UTF8
+          if ($text -notmatch '<Version>(\d+)\.(\d+)\.(\d+)') { throw 'Keine <Version> in der .csproj gefunden.' }
+          $major = [int]$Matches[1]; $minor = [int]$Matches[2]; $patch = [int]$Matches[3]
+
+          # Tag-Schreibweise v2.17.0 (ältere Tags heißen V2.7.0): Groß-/Kleinschreibung ignorieren
+          $tags = git tag --list
+          $bumped = $false
+          while ($tags -contains "v$major.$minor.$patch" -or $tags -contains "V$major.$minor.$patch") {
+              $patch++; $bumped = $true
+          }
+          $version = "$major.$minor.$patch"
+          if ($bumped) {
+              $text = $text -replace '<Version>[\d.]+</Version>', "<Version>$version</Version>"
+              [IO.File]::WriteAllText((Resolve-Path $csproj), $text, (New-Object Text.UTF8Encoding($true)))
+              git config user.name 'github-actions[bot]'
+              git config user.email 'github-actions[bot]@users.noreply.github.com'
+              git add $csproj
+              git commit -m "Version $version (automatisch) [skip ci]"
+              git push origin HEAD:master
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "sha=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $version"
+
+      - name: MSI bauen
+        shell: pwsh
+        run: ./MitgliederverwaltungU19/installer/build-installer.ps1
+
+      - name: Release veröffentlichen
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $msi = "MitgliederverwaltungU19/installer/output/MitgliederverwaltungU19-$v-x64.msi"
+          if (-not (Test-Path $msi)) { throw "Installer nicht gefunden: $msi" }
+          gh release create "v$v" $msi --title "Version $v" --generate-notes --target '${{ steps.ver.outputs.sha }}'
+          if ($LASTEXITCODE -ne 0) { throw 'Release konnte nicht erstellt werden.' }
