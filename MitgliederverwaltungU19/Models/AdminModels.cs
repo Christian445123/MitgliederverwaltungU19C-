@@ -52,3 +52,9 @@ public sealed record LinkInfo(string Name, string Email, string Link, string? Ve
 
 /// <summary>Ergebnis eines Massenmail-Versands je Person: status = sent, no_email oder error.</summary>
 public sealed record SendLinkResult(int Id, string Name, string Status, string Message);
+
+/// <summary>Registrierungslink für neue Mitglieder (Bereich „Neue Mitglieder“), siehe admin/registrations.php.</summary>
+public sealed record RegistrationLink(int Id, string Token, string Url, string? Label, bool Active, string? CreatedBy, string CreatedAt, string? ExpiresAt, int UseCount, string? LastUsedAt)
+{
+    public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? "(ohne Bezeichnung)" : Label;
+}

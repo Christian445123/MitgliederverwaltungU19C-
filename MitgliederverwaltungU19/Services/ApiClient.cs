@@ -249,6 +249,82 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"members/{id}", null, ct);
     }
 
+    // ── Neue Mitglieder: ausstehende Anmeldungen, Registrierungslinks, Benachrichtigungs-Adresse ──
+
+    /// <summary>Neue, noch nicht zugewiesene Anmeldungen (Bereich „Neue Mitglieder“).</summary>
+    public async Task<List<Member>> ListRegistrationsAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "registrations", null, ct);
+        if (!doc.RootElement.TryGetProperty("data", out var data))
+        {
+            throw new ApiException("Die API auf dem Server kennt \"registrations\" noch nicht. Bitte die aktuelle Version einspielen (Änderungen einspielen / git pull).");
+        }
+        return data.EnumerateArray().Select(Member.FromJson).ToList();
+    }
+
+    /// <summary>Übernimmt eine Anmeldung: weist Kader ("kader") oder "nicht_im_kader" zu.</summary>
+    public async Task<Member> ApproveRegistrationAsync(int id, string kader, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"registrations/{id}/approve", new JsonObject { ["kader"] = kader }, ct);
+        return Member.FromJson(doc.RootElement);
+    }
+
+    /// <summary>Lehnt eine Anmeldung ab (löscht den Datensatz).</summary>
+    public async Task RejectRegistrationAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Post, $"registrations/{id}/reject", null, ct);
+    }
+
+    private static RegistrationLink ParseRegistrationLink(JsonElement e) => new(
+        e.GetProperty("id").GetInt32(),
+        Str(e, "token"),
+        Str(e, "url"),
+        e.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString() : null,
+        e.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True,
+        e.TryGetProperty("created_by", out var cb) && cb.ValueKind == JsonValueKind.String ? cb.GetString() : null,
+        Str(e, "created_at"),
+        e.TryGetProperty("expires_at", out var ex) && ex.ValueKind == JsonValueKind.String ? ex.GetString() : null,
+        e.TryGetProperty("use_count", out var uc) && uc.ValueKind == JsonValueKind.Number ? uc.GetInt32() : 0,
+        e.TryGetProperty("last_used_at", out var lu) && lu.ValueKind == JsonValueKind.String ? lu.GetString() : null);
+
+    public async Task<List<RegistrationLink>> ListRegistrationLinksAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "registration-links", null, ct);
+        return doc.RootElement.GetProperty("data").EnumerateArray().Select(ParseRegistrationLink).ToList();
+    }
+
+    /// <summary>Erzeugt einen neuen Registrierungslink. expiresAt: "yyyy-MM-dd" oder null (unbegrenzt gültig).</summary>
+    public async Task<RegistrationLink> CreateRegistrationLinkAsync(string label, string? expiresAt, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["label"] = label };
+        if (!string.IsNullOrWhiteSpace(expiresAt)) body["expires_at"] = expiresAt;
+        using var doc = await SendJsonAsync(HttpMethod.Post, "registration-links", body, ct);
+        return ParseRegistrationLink(doc.RootElement);
+    }
+
+    public async Task<RegistrationLink> SetRegistrationLinkActiveAsync(int id, bool active, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Put, $"registration-links/{id}", new JsonObject { ["active"] = active }, ct);
+        return ParseRegistrationLink(doc.RootElement);
+    }
+
+    public async Task DeleteRegistrationLinkAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"registration-links/{id}", null, ct);
+    }
+
+    /// <summary>Adresse, an die bei neuen bzw. doppelten Anmeldungen eine Benachrichtigung geht (leer = keine).</summary>
+    public async Task<string> GetRegistrationNotifyEmailAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "registration-settings", null, ct);
+        return Str(doc.RootElement, "notify_email");
+    }
+
+    public async Task SetRegistrationNotifyEmailAsync(string email, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Put, "registration-settings", new JsonObject { ["notify_email"] = email }, ct);
+    }
+
     /// <summary>Lädt alle Staff-Mitglieder (Feldname → Textwert).</summary>
     public async Task<List<Dictionary<string, string?>>> ListStaffAsync(CancellationToken ct = default)
     {

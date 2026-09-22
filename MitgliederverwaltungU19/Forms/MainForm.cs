@@ -41,8 +41,10 @@ public sealed class MainForm : Form
     private StaffPanel? _staffPanel;
     private bool _staffLoaded;
     private MissingDocsPanel? _missingPanel;
+    private RegistrationsPanel? _registrationsPanel;
     private SideNavButton? _navExpiry;
     private SideNavButton? _navMissing;
+    private SideNavButton? _navRegistrations;
     private bool _licenseBusy;
 
     public MainForm(AppSettings settings, ApiClient api, PingResult ping)
@@ -144,6 +146,8 @@ public sealed class MainForm : Form
         _navMembers = Nav("Mitglieder", "", () => ShowPage(false), active: true);
         _navStaff = Nav("Staff", "", () => ShowPage(true));
         _navStaff.Visible = _ping.Can("staff.view");
+        _navRegistrations = Nav("Neue Mitglieder", "", ShowRegistrations);
+        _navRegistrations.Visible = _ping.Can("members.registrations");
         var import = Nav("Import …", "", async () => await OpenImportAsync());
         import.Visible = _ping.CanWrite && _ping.Can("members.import");
         Nav("Roster", "", () => { using var form = new RosterForm(_api); form.ShowDialog(this); }).Visible = _ping.Can("members.export");
@@ -345,6 +349,12 @@ public sealed class MainForm : Form
         }
         _missingPanel = new MissingDocsPanel(_api) { Visible = false };
         Controls.Add(_missingPanel);
+        if (_ping.Can("members.registrations"))
+        {
+            _registrationsPanel = new RegistrationsPanel(_api, _ping.CanWrite && _ping.Can("members.registrations")) { Visible = false };
+            _registrationsPanel.Changed += () => { _ = ReloadAsync(); };
+            Controls.Add(_registrationsPanel);
+        }
         Controls.Add(content);
         Controls.Add(sidebar);
     }
@@ -369,23 +379,49 @@ public sealed class MainForm : Form
     {
         if (_playersPage is null) return;
         if (page == "staff" && _staffPanel is null) return;
+        if (page == "registrations" && _registrationsPanel is null) return;
         _playersPage.Visible = page == "players";
         if (_staffPanel is not null) _staffPanel.Visible = page == "staff";
         if (_missingPanel is not null) _missingPanel.Visible = page == "missing";
+        if (_registrationsPanel is not null) _registrationsPanel.Visible = page == "registrations";
         if (_navMembers is not null) _navMembers.Active = page == "players";
         if (_navStaff is not null) _navStaff.Active = page == "staff";
         if (_navMissing is not null) _navMissing.Active = page == "missing";
+        if (_navRegistrations is not null) _navRegistrations.Active = page == "registrations";
         _navMembers?.Invalidate();
         _navStaff?.Invalidate();
         _navMissing?.Invalidate();
+        _navRegistrations?.Invalidate();
         if (page == "staff" && !_staffLoaded)
         {
             _staffLoaded = true;
             _ = _staffPanel!.ReloadAsync();
         }
+        else if (page == "registrations")
+        {
+            _ = _registrationsPanel!.ReloadAsync();
+        }
         else if (page == "players")
         {
             _grid.Focus();
+        }
+    }
+
+    private void ShowRegistrations() => ShowPage("registrations");
+
+    /// <summary>Zahl der neuen, noch nicht zugewiesenen Anmeldungen in der Seitenleiste anzeigen (Fehler werden ignoriert).</summary>
+    private async Task UpdateRegistrationsBadgeAsync()
+    {
+        if (_navRegistrations is null || !_ping.Can("members.registrations")) return;
+        try
+        {
+            var count = (await _api.ListRegistrationsAsync()).Count;
+            _navRegistrations.Badge = count;
+            _navRegistrations.Invalidate();
+        }
+        catch (Exception)
+        {
+            // Badge ist nur ein Hinweis - beim nächsten Aktualisieren erneut versuchen
         }
     }
 
@@ -414,6 +450,7 @@ public sealed class MainForm : Form
             _all = await _api.ListAllAsync();
             ApplyFilter();
             UpdateExpiryBanner();
+            await UpdateRegistrationsBadgeAsync();
         }
         catch (Exception ex)
         {
