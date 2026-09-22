@@ -265,8 +265,15 @@ public sealed class ApiClient : IDisposable
     /// <summary>Übernimmt eine Anmeldung: weist Kader ("kader") oder "nicht_im_kader" zu.</summary>
     public async Task<Member> ApproveRegistrationAsync(int id, string kader, CancellationToken ct = default)
     {
-        using var doc = await SendJsonAsync(HttpMethod.Post, $"registrations/{id}/approve", new JsonObject { ["kader"] = kader }, ct);
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"registrations/{id}/approve", new JsonObject { ["target"] = kader }, ct);
         return Member.FromJson(doc.RootElement);
+    }
+
+    /// <summary>Übernimmt eine Anmeldung NICHT als Spieler, sondern als Staff. Liefert die ID der neu angelegten Staff-Person.</summary>
+    public async Task<int> ApproveRegistrationAsStaffAsync(int id, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"registrations/{id}/approve", new JsonObject { ["target"] = "staff" }, ct);
+        return doc.RootElement.GetProperty("staff_id").GetInt32();
     }
 
     /// <summary>Lehnt eine Anmeldung ab (löscht den Datensatz).</summary>

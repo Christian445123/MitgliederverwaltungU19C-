@@ -12,6 +12,7 @@ public sealed class RegistrationsPanel : UserControl
     private readonly ApiClient _api;
     private readonly bool _canWrite;
     private readonly DataGridView _grid = new();
+    private readonly ComboBox _target = new() { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Label _footer = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft };
     private List<Member> _all = new();
 
@@ -58,20 +59,20 @@ public sealed class RegistrationsPanel : UserControl
         };
 
         var details = Theme.MakeButton("Details ansehen …");
-        var approveKader = Theme.MakeButton("In den Kader", primary: true);
-        var approveNotKader = Theme.MakeButton("Nicht im Kader");
+        _target.Items.AddRange(new object[] { "Kader", "Nicht im Kader", "Staff" });
+        _target.SelectedIndex = 0;
+        _target.Margin = new Padding(0, 4, 8, 0);
+        var approve = Theme.MakeButton("Übernehmen", primary: true);
         var reject = Theme.MakeButton("Ablehnen …");
         reject.ForeColor = Theme.Danger;
-        approveKader.Enabled = approveNotKader.Enabled = reject.Enabled = _canWrite;
+        _target.Enabled = approve.Enabled = reject.Enabled = _canWrite;
         details.Click += async (_, _) => { if (Current() is { } m) await OpenDetailsAsync(m); };
-        approveKader.Click += async (_, _) => await ApproveAsync("kader");
-        approveNotKader.Click += async (_, _) => await ApproveAsync("nicht_im_kader");
+        approve.Click += async (_, _) => await ApproveAsync();
         reject.Click += async (_, _) => await RejectAsync();
         var actionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.Px(52)), WrapContents = true, Padding = new Padding(0, 6, 0, 0) };
-        details.Margin = new Padding(0, 0, 8, 0);
-        approveKader.Margin = new Padding(0, 0, 8, 0);
-        approveNotKader.Margin = new Padding(0, 0, 8, 0);
-        actionBar.Controls.AddRange(new Control[] { details, approveKader, approveNotKader, reject });
+        details.Margin = new Padding(0, 0, 16, 0);
+        approve.Margin = new Padding(0, 0, 8, 0);
+        actionBar.Controls.AddRange(new Control[] { details, _target, approve, reject });
 
         _grid.Dock = DockStyle.Fill;
         _grid.ReadOnly = true;
@@ -151,14 +152,22 @@ public sealed class RegistrationsPanel : UserControl
         }
     }
 
-    private async Task ApproveAsync(string kader)
+    private async Task ApproveAsync()
     {
         if (Current() is not { } member) return;
-        var label = kader == "nicht_im_kader" ? "nicht im Kader" : "in den Kader";
+        var target = _target.SelectedIndex switch { 1 => "nicht_im_kader", 2 => "staff", _ => "kader" };
+        var label = target switch { "nicht_im_kader" => "nicht im Kader", "staff" => "als Staff", _ => "in den Kader" };
         if (MessageBox.Show(FindForm(), $"„{member.FullName}“ wirklich übernehmen ({label})?", "Übernehmen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         try
         {
-            await _api.ApproveRegistrationAsync(member.Id, kader);
+            if (target == "staff")
+            {
+                await _api.ApproveRegistrationAsStaffAsync(member.Id);
+            }
+            else
+            {
+                await _api.ApproveRegistrationAsync(member.Id, target);
+            }
             await ReloadAsync();
             Changed?.Invoke();
         }

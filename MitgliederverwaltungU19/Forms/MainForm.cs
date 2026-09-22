@@ -352,7 +352,12 @@ public sealed class MainForm : Form
         if (_ping.Can("members.registrations"))
         {
             _registrationsPanel = new RegistrationsPanel(_api, _ping.CanWrite && _ping.Can("members.registrations")) { Visible = false };
-            _registrationsPanel.Changed += () => { _ = ReloadAsync(); };
+            _registrationsPanel.Changed += () =>
+            {
+                _ = ReloadAsync();
+                // Übernahme als Staff wirkt sich auf die Staff-Liste aus; nur neu laden, wenn sie schon geladen wurde
+                if (_staffLoaded && _staffPanel is not null) _ = _staffPanel.ReloadAsync();
+            };
             Controls.Add(_registrationsPanel);
         }
         Controls.Add(content);
