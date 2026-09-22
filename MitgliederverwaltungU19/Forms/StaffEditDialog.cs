@@ -24,6 +24,7 @@ internal sealed class StaffEditDialog : Form
         ("Sozialversicherung", new[] { "sozialversicherungsnummer" }, new[] { ("ecard", "E-Card (freiwillig)") }),
         ("Reisepass", new[] { "reisepass_nr", "reisepass_ausgestellt_am", "reisepass_gueltig_bis", "geburtsland", "ausstellungsbehoerde" }, new[] { ("pass", "Reisepass (Foto, freiwillig)") }),
         ("Dokumente", Array.Empty<string>(), new[] { ("rechte", "Rechte & Pflichten (unterschrieben, freiwillig)") }),
+        ("Kontodaten", new[] { "kontoinhaber", "iban", "bic" }, Array.Empty<(string, string)>()),
         ("Ausrüstung & Essen", new[] { "essen", "tshirt_polo_groesse", "hoodie_groesse", "jacken_groesse", "short_groesse", "shorts_anzahl", "coaching_hosen_lang_groesse" }, Array.Empty<(string, string)>()),
     };
 

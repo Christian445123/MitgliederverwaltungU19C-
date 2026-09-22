@@ -18,6 +18,8 @@ public sealed class MainForm : Form
     private readonly List<Button> _writeButtons = new();
 
     private List<Member> _all = new();
+    private readonly HashSet<int> _checkedIds = new();
+    private Action? _updateBulkButtons;
     private readonly Panel _banner = new() { Dock = DockStyle.Top, Height = 40, BackColor = Color.FromArgb(0xFF, 0xF2, 0xE6), Visible = false };
     private readonly Label _bannerText = new() { AutoSize = true, Location = new Point(16, 11), Font = Theme.Bold };
     private readonly Button _showExpiry = Theme.MakeButton("Ablauf anzeigen");
@@ -107,6 +109,10 @@ public sealed class MainForm : Form
         var verify = Theme.MakeButton("Bestätigung …");
         verify.Enabled = _ping.CanWrite && _ping.Can("members.links");
         verify.Click += async (_, _) => await VerifyAsync();
+        var selectAll = Theme.MakeButton("Alle auswählen");
+        var selectNone = Theme.MakeButton("Aufheben");
+        selectAll.Click += (_, _) => SetAllChecked(true);
+        selectNone.Click += (_, _) => SetAllChecked(false);
         add.Click += async (_, _) => await OpenEditorAsync(null);
         export.Click += async (_, _) => await ExportAsync();
         edit.Click += async (_, _) => { if (SelectedMember() is { } m) await OpenEditorAsync(m); };
@@ -269,9 +275,11 @@ public sealed class MainForm : Form
         edit.Margin = new Padding(0, 0, 8, 0);
         link.Margin = new Padding(0, 0, 8, 0);
         verify.Margin = new Padding(0, 0, 8, 0);
+        selectAll.Margin = new Padding(0, 0, 4, 0);
+        selectNone.Margin = new Padding(0, 0, 8, 0);
         delete.Margin = new Padding(0, 0, 8, 0);
         deleteAll.Margin = new Padding(0, 0, 0, 0);
-        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, link, verify, delete, deleteAll });
+        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, link, verify, selectAll, selectNone, delete, deleteAll });
 
         // Tabelle in einer Karte mit feinem Rahmen
         _grid.Dock = DockStyle.Fill;
@@ -285,6 +293,8 @@ public sealed class MainForm : Form
         Theme.StyleGrid(_grid);
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
+        _grid.Columns.Add(Theme.CheckColumn());
+        Theme.WireCheckboxCommit(_grid);
         AddColumn("name", "Name", 16);
         AddColumn("verein", "Verein", 13);
         AddColumn("position", "Position", 7);
@@ -298,7 +308,7 @@ public sealed class MainForm : Form
         AddColumn("pass", "Pass", 9);
         _grid.Columns.Add(Theme.LinkColumn());
         // Bei schmalem Fenster weniger wichtige Spalten ausblenden (Reihenfolge: zuerst Telefon, zuletzt E-Mail)
-        var wish = new Dictionary<string, int> { ["name"] = 170, ["verein"] = 130, ["position"] = 100, ["jersey"] = 60, ["email"] = 200, ["telefon"] = 130, ["status"] = 80, ["kader"] = 110, ["bestaetigt"] = 120, ["nada"] = 105, ["pass"] = 105 };
+        var wish = new Dictionary<string, int> { ["check"] = 30, ["name"] = 170, ["verein"] = 130, ["position"] = 100, ["jersey"] = 60, ["email"] = 200, ["telefon"] = 130, ["status"] = 80, ["kader"] = 110, ["bestaetigt"] = 120, ["nada"] = 105, ["pass"] = 105 };
         var hideOrder = new[] { "telefon", "kader", "status", "jersey", "position", "pass", "nada", "verein", "bestaetigt", "email" };
         var fitting = false;
         void Refit()
@@ -326,6 +336,32 @@ public sealed class MainForm : Form
         {
             if (e.KeyCode == Keys.Enter) { e.Handled = true; if (SelectedMember() is { } m) await OpenEditorAsync(m); }
         };
+        _grid.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "check" || _grid.Rows[e.RowIndex].Tag is not Member m) return;
+            if ((bool) (_grid.Rows[e.RowIndex].Cells["check"].Value ?? false)) _checkedIds.Add(m.Id);
+            else _checkedIds.Remove(m.Id);
+            UpdateBulkButtons();
+        };
+
+        // Kästchen zum Auswählen (wie im Webpanel): Beschriftung der Aktionen zeigt die Anzahl an
+        void UpdateBulkButtons()
+        {
+            var n = _checkedIds.Count;
+            delete.Text = n > 0 ? $"Auswahl löschen ({n})" : "Auswahl löschen";
+            delete.Enabled = _ping.CanWrite && _ping.Can("members.delete") && n > 0;
+            verify.Text = n > 0 ? $"Bestätigung … ({n})" : "Bestätigung …";
+        }
+        void SetAllChecked(bool value)
+        {
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                row.Cells["check"].Value = value;
+                if (row.Tag is Member m) { if (value) _checkedIds.Add(m.Id); else _checkedIds.Remove(m.Id); }
+            }
+            UpdateBulkButtons();
+        }
+        _updateBulkButtons = UpdateBulkButtons;
 
         var gridCard = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Border, Padding = new Padding(1) };
         gridCard.Controls.Add(_grid);
@@ -453,6 +489,7 @@ public sealed class MainForm : Form
         try
         {
             _all = await _api.ListAllAsync();
+            _checkedIds.IntersectWith(_all.Select(m => m.Id)); // gelöschte/nicht mehr vorhandene Mitglieder aus der Auswahl entfernen
             ApplyFilter();
             UpdateExpiryBanner();
             await UpdateRegistrationsBadgeAsync();
@@ -487,7 +524,7 @@ public sealed class MainForm : Form
                                   .ThenBy(m => m.Get("vorname"), StringComparer.CurrentCultureIgnoreCase))
         {
             var idx = _grid.Rows.Add(
-                m.FullName, m.Get("verein"), m.Get("position"), m.Get("jersey_nr"), m.Get("email"),
+                _checkedIds.Contains(m.Id), m.FullName, m.Get("verein"), m.Get("position"), m.Get("jersey_nr"), m.Get("email"),
                 m.Get("telefon"), m.Get("status") == "inaktiv" ? "Inaktiv" : "Aktiv",
                 m.Get("kader") == "nicht_im_kader" ? "nicht im Kader" : "Im Kader",
                 m.ConfirmedAt is null ? "ausstehend" : "✓ " + FormatDate(m.ConfirmedAt),
@@ -499,7 +536,7 @@ public sealed class MainForm : Form
             if (m.ConfirmedAt is null) row.Cells["bestaetigt"].Style.ForeColor = Theme.AccentDark;
             else row.Cells["bestaetigt"].Style.ForeColor = Theme.Green;
             if (m.Get("status") == "inaktiv") row.DefaultCellStyle.ForeColor = Theme.Muted;
-            if (m.Id == selectedId) { row.Selected = true; _grid.CurrentCell = row.Cells[0]; }
+            if (m.Id == selectedId) { row.Selected = true; _grid.CurrentCell = row.Cells["name"]; }
         }
         _grid.ResumeLayout();
 
@@ -510,6 +547,7 @@ public sealed class MainForm : Form
         _cardKader.Set(inKader.ToString(), $"Im Kader · {_all.Count - inKader} nicht");
         _cardConfirmed.Set(confirmed.ToString(), $"Bestätigt · {_all.Count - confirmed} offen");
         _footer.Text = $"{filtered.Count} von {_all.Count} angezeigt · Doppelklick zum Bearbeiten";
+        _updateBulkButtons?.Invoke();
     }
 
     private static string FormatDate(string s) =>
@@ -650,8 +688,9 @@ public sealed class MainForm : Form
         if (form.Changed) await ReloadAsync();
     }
 
+    /// <summary>Über die Kästchen ausgewählte Mitglieder (wie im Webpanel), nicht die reine Zeilenmarkierung.</summary>
     private List<Member> SelectedMembers() =>
-        _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<Member>().ToList();
+        _all.Where(m => _checkedIds.Contains(m.Id)).ToList();
 
     private async Task DeleteSelectedAsync()
     {

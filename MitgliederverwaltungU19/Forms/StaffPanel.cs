@@ -29,6 +29,9 @@ public sealed class StaffPanel : UserControl
         ("plz", "PLZ", false, false, false),
         ("ort", "Ort", false, false, false),
         ("strasse", "Straße", false, false, false),
+        ("kontoinhaber", "Kontoinhaber", false, false, false),
+        ("iban", "IBAN", false, false, false),
+        ("bic", "BIC", false, false, false),
         ("essen", "Essen", false, true, false),
         ("tshirt_polo_groesse", "T-Shirt / Polo Größe", false, false, false),
         ("hoodie_groesse", "Hoodie Größe", false, false, false),
@@ -50,6 +53,8 @@ public sealed class StaffPanel : UserControl
     private readonly StatCard _cardConfirmed = new("Daten bestätigt", Color.FromArgb(0x10, 0xB9, 0x81));
     private readonly StatCard _cardExpiry = new("Ablauf Reisepass", Color.FromArgb(0xEA, 0xB3, 0x08));
     private List<Dictionary<string, string?>> _all = new();
+    private readonly HashSet<int> _checkedIds = new();
+    private Action? _updateBulkButtons;
 
     public StaffPanel(ApiClient api, PingResult ping)
     {
@@ -106,12 +111,18 @@ public sealed class StaffPanel : UserControl
         var edit = Theme.MakeButton("Bearbeiten");
         var link = Theme.MakeButton("Zugangslink …");
         var verify = Theme.MakeButton("Bestätigung …");
+        var selectAll = Theme.MakeButton("Alle auswählen");
+        var selectNone = Theme.MakeButton("Aufheben");
         var delete = Theme.MakeButton("Auswahl löschen");
         edit.Enabled = _canWrite;
         link.Enabled = verify.Enabled = _canWrite;
         delete.Enabled = _canDelete;
+        selectAll.Margin = new Padding(0, 0, 4, 0);
+        selectNone.Margin = new Padding(0, 0, 8, 0);
+        selectAll.Click += (_, _) => SetAllChecked(true);
+        selectNone.Click += (_, _) => SetAllChecked(false);
         var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.Px(52)), WrapContents = true, Padding = new Padding(0, 6, 0, 0) };
-        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, edit, link, verify, delete });
+        filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, edit, link, verify, selectAll, selectNone, delete });
 
         // Tabelle in einer Karte
         _grid.Dock = DockStyle.Fill;
@@ -125,6 +136,8 @@ public sealed class StaffPanel : UserControl
         _grid.AutoGenerateColumns = false;
         Theme.StyleGrid(_grid);
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _grid.Columns.Add(Theme.CheckColumn());
+        Theme.WireCheckboxCommit(_grid);
         foreach (var (key, label, weight) in new[]
                  {
                      ("name", "Name & Vorname", 18f), ("position", "Position", 9f), ("nada", "Nada", 6f),
@@ -143,7 +156,7 @@ public sealed class StaffPanel : UserControl
             });
         }
         _grid.Columns.Add(Theme.LinkColumn());
-        var wish = new Dictionary<string, int> { ["name"] = 190, ["position"] = 110, ["nada"] = 70, ["telefon"] = 130, ["email"] = 210, ["reisepass_gueltig_bis"] = 105, ["status"] = 80, ["bestaetigt"] = 120 };
+        var wish = new Dictionary<string, int> { ["check"] = 30, ["name"] = 190, ["position"] = 110, ["nada"] = 70, ["telefon"] = 130, ["email"] = 210, ["reisepass_gueltig_bis"] = 105, ["status"] = 80, ["bestaetigt"] = 120 };
         var hideOrder = new[] { "telefon", "status", "nada", "position", "reisepass_gueltig_bis", "bestaetigt", "email" };
         var fitting = false;
         void Refit()
@@ -183,6 +196,32 @@ public sealed class StaffPanel : UserControl
             if (e.RowIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "link" || !_canWrite) return;
             if (_grid.Rows[e.RowIndex].Tag is Dictionary<string, string?> row) OpenLink(row);
         };
+        _grid.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex < 0 || _grid.Columns[e.ColumnIndex].Name != "check" || _grid.Rows[e.RowIndex].Tag is not Dictionary<string, string?> row) return;
+            if ((bool) (_grid.Rows[e.RowIndex].Cells["check"].Value ?? false)) _checkedIds.Add(IdOf(row));
+            else _checkedIds.Remove(IdOf(row));
+            UpdateBulkButtons();
+        };
+
+        // Kästchen zum Auswählen (wie im Webpanel): Beschriftung der Aktionen zeigt die Anzahl an
+        void UpdateBulkButtons()
+        {
+            var n = _checkedIds.Count;
+            delete.Text = n > 0 ? $"Auswahl löschen ({n})" : "Auswahl löschen";
+            delete.Enabled = _canDelete && n > 0;
+            verify.Text = n > 0 ? $"Bestätigung … ({n})" : "Bestätigung …";
+        }
+        void SetAllChecked(bool value)
+        {
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                row.Cells["check"].Value = value;
+                if (row.Tag is Dictionary<string, string?> r) { if (value) _checkedIds.Add(IdOf(r)); else _checkedIds.Remove(IdOf(r)); }
+            }
+            UpdateBulkButtons();
+        }
+        _updateBulkButtons = UpdateBulkButtons;
     }
 
     /// <summary>Lädt die Liste beim ersten Anzeigen des Bereichs neu.</summary>
@@ -192,6 +231,7 @@ public sealed class StaffPanel : UserControl
         {
             _footer.Text = "Lade Staff …";
             _all = await _api.ListStaffAsync();
+            _checkedIds.IntersectWith(_all.Select(IdOf)); // gelöschte/nicht mehr vorhandene Personen aus der Auswahl entfernen
             ApplyFilter();
         }
         catch (Exception ex)
@@ -203,8 +243,9 @@ public sealed class StaffPanel : UserControl
 
     private Dictionary<string, string?>? Current() => _grid.CurrentRow?.Tag as Dictionary<string, string?>;
 
+    /// <summary>Über die Kästchen ausgewählte Personen (wie im Webpanel), nicht die reine Zeilenmarkierung.</summary>
     private IEnumerable<Dictionary<string, string?>> Selected() =>
-        _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag).OfType<Dictionary<string, string?>>();
+        _all.Where(r => _checkedIds.Contains(IdOf(r)));
 
     private static string Val(Dictionary<string, string?> row, string key) => row.TryGetValue(key, out var v) ? v ?? "" : "";
 
@@ -248,7 +289,7 @@ public sealed class StaffPanel : UserControl
             var pass = Expiry.Check(Val(r, "reisepass_gueltig_bis"), DateTime.Today.AddMonths(Expiry.PassWarnMonths), DateTime.Today);
             var confirmed = Val(r, "bestaetigt_am");
             var idx = _grid.Rows.Add(
-                NameOf(r), Val(r, "position"), NadaText(Val(r, "nada")),
+                _checkedIds.Contains(IdOf(r)), NameOf(r), Val(r, "position"), NadaText(Val(r, "nada")),
                 Val(r, "telefon"), Val(r, "email"),
                 Val(r, "reisepass_gueltig_bis").Length > 0 ? FormatDate(Val(r, "reisepass_gueltig_bis")) : "",
                 Val(r, "status") == "inaktiv" ? "Inaktiv" : "Aktiv",
@@ -258,7 +299,7 @@ public sealed class StaffPanel : UserControl
             MarkExpiry(row.Cells["reisepass_gueltig_bis"], pass);
             row.Cells["bestaetigt"].Style.ForeColor = confirmed.Length == 0 ? Theme.AccentDark : Theme.Green;
             if (Val(r, "status") == "inaktiv") row.DefaultCellStyle.ForeColor = Theme.Muted;
-            if (IdOf(r) == selectedId && selectedId != 0) { row.Selected = true; _grid.CurrentCell = row.Cells[0]; }
+            if (IdOf(r) == selectedId && selectedId != 0) { row.Selected = true; _grid.CurrentCell = row.Cells["name"]; }
         }
         _grid.ResumeLayout();
 
@@ -270,6 +311,7 @@ public sealed class StaffPanel : UserControl
         _cardConfirmed.Set(confirmedCount.ToString(), $"Bestätigt · {_all.Count - confirmedCount} offen");
         _cardExpiry.Set(expiring.ToString(), "Läuft ab / abgelaufen");
         _footer.Text = $"{rows.Count} von {_all.Count} angezeigt · Doppelklick zum Bearbeiten";
+        _updateBulkButtons?.Invoke();
     }
 
     private void OpenLink(Dictionary<string, string?> row)

@@ -360,6 +360,30 @@ public static class Theme
         return col;
     }
 
+    /// <summary>Kästchen zum Auswählen einzelner Zeilen (wie im Webpanel), immer die erste Spalte.</summary>
+    public static DataGridViewCheckBoxColumn CheckColumn()
+    {
+        return new DataGridViewCheckBoxColumn
+        {
+            Name = "check",
+            HeaderText = "",
+            Width = Px(32),
+            MinimumWidth = Px(32),
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Resizable = DataGridViewTriState.False,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+        };
+    }
+
+    /// <summary>Übernimmt den neuen Wert einer Checkbox-Zelle sofort (sonst erst nach Fokuswechsel).</summary>
+    public static void WireCheckboxCommit(DataGridView grid)
+    {
+        grid.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        };
+    }
+
     public static void ShowError(IWin32Window owner, Exception ex) =>
         MessageBox.Show(owner, ex.Message, "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
 }
