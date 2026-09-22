@@ -450,20 +450,29 @@ public sealed class MainForm : Form
 
     private void ShowRegistrations() => ShowPage("registrations");
 
-    /// <summary>Zahl der neuen, noch nicht zugewiesenen Anmeldungen in der Seitenleiste anzeigen (Fehler werden ignoriert).</summary>
+    /// <summary>Zahl der neuen, noch nicht zugewiesenen Anmeldungen (Spieler + Staff) in der Seitenleiste anzeigen (Fehler werden ignoriert).</summary>
     private async Task UpdateRegistrationsBadgeAsync()
     {
         if (_navRegistrations is null || !_ping.Can("members.registrations")) return;
+        var count = 0;
         try
         {
-            var count = (await _api.ListRegistrationsAsync()).Count;
-            _navRegistrations.Badge = count;
-            _navRegistrations.Invalidate();
+            count += (await _api.ListRegistrationsAsync()).Count;
         }
         catch (Exception)
         {
             // Badge ist nur ein Hinweis - beim nächsten Aktualisieren erneut versuchen
         }
+        try
+        {
+            count += (await _api.ListPendingStaffAsync()).Count;
+        }
+        catch (Exception)
+        {
+            // z. B. alter Server ohne "registrations/staff" - Spieler-Anzahl trotzdem anzeigen
+        }
+        _navRegistrations.Badge = count;
+        _navRegistrations.Invalidate();
     }
 
     private void AddColumn(string name, string title, float weight)

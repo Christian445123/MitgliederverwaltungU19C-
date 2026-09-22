@@ -282,11 +282,42 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Post, $"registrations/{id}/reject", null, ct);
     }
 
+    /// <summary>Neue, noch nicht freigegebene Staff-Anmeldungen (eigener Staff-Einladungslink).</summary>
+    public async Task<List<PendingStaff>> ListPendingStaffAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "registrations/staff", null, ct);
+        if (!doc.RootElement.TryGetProperty("data", out var data))
+        {
+            throw new ApiException("Die API auf dem Server kennt \"registrations/staff\" noch nicht. Bitte die aktuelle Version einspielen (Änderungen einspielen / git pull).");
+        }
+        return data.EnumerateArray().Select(e => new PendingStaff(
+            e.GetProperty("id").GetInt32(),
+            Str(e, "name_vorname"),
+            e.TryGetProperty("position", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null,
+            e.TryGetProperty("email", out var em) && em.ValueKind == JsonValueKind.String ? em.GetString() : null,
+            e.TryGetProperty("telefon", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null,
+            e.TryGetProperty("created_at", out var ca) && ca.ValueKind == JsonValueKind.String ? ca.GetString() : null
+        )).ToList();
+    }
+
+    /// <summary>Übernimmt eine Staff-Anmeldung (setzt den Status auf aktiv).</summary>
+    public async Task ApproveStaffRegistrationAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Post, $"registrations/staff/{id}/approve", null, ct);
+    }
+
+    /// <summary>Lehnt eine Staff-Anmeldung ab (löscht den Datensatz).</summary>
+    public async Task RejectStaffRegistrationAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Post, $"registrations/staff/{id}/reject", null, ct);
+    }
+
     private static RegistrationLink ParseRegistrationLink(JsonElement e) => new(
         e.GetProperty("id").GetInt32(),
         Str(e, "token"),
         Str(e, "url"),
         e.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString() : null,
+        e.TryGetProperty("link_type", out var lt) && lt.ValueKind == JsonValueKind.String && lt.GetString() == "staff" ? "staff" : "player",
         e.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True,
         e.TryGetProperty("created_by", out var cb) && cb.ValueKind == JsonValueKind.String ? cb.GetString() : null,
         Str(e, "created_at"),
@@ -300,10 +331,11 @@ public sealed class ApiClient : IDisposable
         return doc.RootElement.GetProperty("data").EnumerateArray().Select(ParseRegistrationLink).ToList();
     }
 
-    /// <summary>Erzeugt einen neuen Registrierungslink. expiresAt: "yyyy-MM-dd" oder null (unbegrenzt gültig).</summary>
-    public async Task<RegistrationLink> CreateRegistrationLinkAsync(string label, string? expiresAt, CancellationToken ct = default)
+    /// <summary>Erzeugt einen neuen Registrierungslink. expiresAt: "yyyy-MM-dd" oder null (unbegrenzt gültig).
+    /// linkType: "player" (Standard) oder "staff".</summary>
+    public async Task<RegistrationLink> CreateRegistrationLinkAsync(string label, string? expiresAt, string linkType = "player", CancellationToken ct = default)
     {
-        var body = new JsonObject { ["label"] = label };
+        var body = new JsonObject { ["label"] = label, ["link_type"] = linkType == "staff" ? "staff" : "player" };
         if (!string.IsNullOrWhiteSpace(expiresAt)) body["expires_at"] = expiresAt;
         using var doc = await SendJsonAsync(HttpMethod.Post, "registration-links", body, ct);
         return ParseRegistrationLink(doc.RootElement);

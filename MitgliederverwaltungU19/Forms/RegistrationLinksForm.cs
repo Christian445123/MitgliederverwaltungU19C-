@@ -14,6 +14,7 @@ public sealed class RegistrationLinksForm : Form
     private readonly bool _canWrite;
     private readonly DataGridView _grid = new();
     private readonly TextBox _label = new() { Width = 220, PlaceholderText = "Bezeichnung, z. B. Saison 2026" };
+    private readonly ComboBox _linkType = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly DateTimePicker _expires = new() { ShowCheckBox = true, Checked = false, Format = DateTimePickerFormat.Short, Width = 130 };
     private readonly TextBox _notifyEmail = new() { Width = 260, PlaceholderText = "admin@verein.at" };
     private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(700, 0), ForeColor = Theme.Muted, Margin = new Padding(0, 8, 0, 0) };
@@ -49,13 +50,15 @@ public sealed class RegistrationLinksForm : Form
         notifyBar.Controls.AddRange(new Control[] { notifyLabel, _notifyEmail, saveNotify });
 
         // Neuen Link erzeugen
+        _linkType.Items.AddRange(new object[] { "Spieler-Link", "Staff-Link" });
+        _linkType.SelectedIndex = 0;
         var create = Theme.MakeButton("Link erzeugen", primary: true);
         create.Enabled = _canWrite;
         create.Click += async (_, _) => await CreateAsync();
         var expiresLabel = new Label { Text = "gültig bis (optional):", AutoSize = true, Margin = new Padding(10, 8, 4, 0) };
-        _label.Enabled = _expires.Enabled = _canWrite;
+        _label.Enabled = _expires.Enabled = _linkType.Enabled = _canWrite;
         var createBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(16, 10, 16, 0) };
-        createBar.Controls.AddRange(new Control[] { _label, expiresLabel, _expires, create });
+        createBar.Controls.AddRange(new Control[] { _linkType, _label, expiresLabel, _expires, create });
 
         // Liste
         _grid.Dock = DockStyle.Fill;
@@ -66,11 +69,12 @@ public sealed class RegistrationLinksForm : Form
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         Theme.StyleGrid(_grid);
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "label", HeaderText = "Bezeichnung", FillWeight = 20 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "url", HeaderText = "Link", FillWeight = 34 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "type", HeaderText = "Art", FillWeight = 12 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "label", HeaderText = "Bezeichnung", FillWeight = 18 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "url", HeaderText = "Link", FillWeight = 32 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "uses", HeaderText = "Verwendet", FillWeight = 12 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "expires", HeaderText = "Gültig bis", FillWeight = 14 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 14 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "expires", HeaderText = "Gültig bis", FillWeight = 13 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 13 });
 
         var copy = Theme.MakeButton("Link kopieren");
         var toggle = Theme.MakeButton("Aktivieren/Deaktivieren");
@@ -123,9 +127,10 @@ public sealed class RegistrationLinksForm : Form
         foreach (var l in links)
         {
             var expires = l.ExpiresAt is { Length: > 0 } && DateTime.TryParse(l.ExpiresAt, out var exDate) ? exDate.ToString("dd.MM.yyyy") : "–";
-            var idx = _grid.Rows.Add(l.DisplayLabel, l.Url, l.UseCount.ToString(), expires, l.Active ? "Aktiv" : "Deaktiviert");
+            var idx = _grid.Rows.Add(l.IsStaff ? "Staff" : "Spieler", l.DisplayLabel, l.Url, l.UseCount.ToString(), expires, l.Active ? "Aktiv" : "Deaktiviert");
             var row = _grid.Rows[idx];
             row.Tag = l;
+            row.Cells["type"].Style.ForeColor = l.IsStaff ? Theme.Muted : Theme.Green;
             row.Cells["status"].Style.ForeColor = l.Active ? Theme.Green : Theme.Muted;
         }
     }
@@ -149,7 +154,8 @@ public sealed class RegistrationLinksForm : Form
         try
         {
             var expires = _expires.Checked ? _expires.Value.ToString("yyyy-MM-dd") : null;
-            await _api.CreateRegistrationLinkAsync(_label.Text.Trim(), expires);
+            var linkType = _linkType.SelectedIndex == 1 ? "staff" : "player";
+            await _api.CreateRegistrationLinkAsync(_label.Text.Trim(), expires, linkType);
             _label.Clear();
             _expires.Checked = false;
             await LoadAsync();

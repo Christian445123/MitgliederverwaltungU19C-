@@ -16,6 +16,10 @@ public sealed class RegistrationsPanel : UserControl
     private readonly Label _footer = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft };
     private List<Member> _all = new();
 
+    private readonly DataGridView _staffGrid = new();
+    private readonly Label _staffFooter = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.MiddleLeft };
+    private List<PendingStaff> _allStaff = new();
+
     /// <summary>Wird ausgelöst, nachdem eine Anmeldung übernommen, abgelehnt oder bearbeitet wurde (Hauptliste/Badge aktualisieren).</summary>
     public event Action? Changed;
 
@@ -99,14 +103,62 @@ public sealed class RegistrationsPanel : UserControl
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 30, BackColor = Theme.Background };
         footer.Controls.Add(_footer);
 
-        Controls.Add(gridCard);
-        Controls.Add(footer);
-        Controls.Add(actionBar);
-        Controls.Add(info);
+        var playerPage = new TabPage("Spieler") { BackColor = Theme.Background, Padding = new Padding(0, 8, 0, 0) };
+        playerPage.Controls.Add(gridCard);
+        playerPage.Controls.Add(footer);
+        playerPage.Controls.Add(actionBar);
+        playerPage.Controls.Add(info);
+
+        // ── Staff-Anmeldungen (eigener Staff-Einladungslink) ────────────────
+        var staffApprove = Theme.MakeButton("Übernehmen", primary: true);
+        var staffReject = Theme.MakeButton("Ablehnen …");
+        staffReject.ForeColor = Theme.Danger;
+        staffApprove.Enabled = staffReject.Enabled = _canWrite;
+        staffApprove.Click += async (_, _) => await ApproveStaffAsync();
+        staffReject.Click += async (_, _) => await RejectStaffAsync();
+        var staffActionBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.Px(52)), WrapContents = true, Padding = new Padding(0, 6, 0, 0) };
+        staffApprove.Margin = new Padding(0, 0, 8, 0);
+        staffActionBar.Controls.AddRange(new Control[] { staffApprove, staffReject });
+
+        _staffGrid.Dock = DockStyle.Fill;
+        _staffGrid.ReadOnly = true;
+        _staffGrid.AllowUserToAddRows = false;
+        _staffGrid.AllowUserToDeleteRows = false;
+        _staffGrid.AllowUserToResizeRows = false;
+        _staffGrid.MultiSelect = false;
+        _staffGrid.RowHeadersVisible = false;
+        _staffGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        Theme.StyleGrid(_staffGrid);
+        _staffGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        foreach (var (key, label, weight) in new[]
+                 {
+                     ("name", "Name & Vorname", 26f), ("position", "Position", 16f), ("email", "E-Mail", 26f),
+                     ("telefon", "Telefon", 16f), ("angemeldet", "Angemeldet am", 16f),
+                 })
+        {
+            _staffGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = key, HeaderText = label, FillWeight = weight, SortMode = DataGridViewColumnSortMode.Automatic, MinimumWidth = Theme.Px(70) });
+        }
+
+        var staffGridCard = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Border, Padding = new Padding(1) };
+        staffGridCard.Controls.Add(_staffGrid);
+        var staffFooter = new Panel { Dock = DockStyle.Bottom, Height = 30, BackColor = Theme.Background };
+        staffFooter.Controls.Add(_staffFooter);
+
+        var staffPage = new TabPage("Staff") { BackColor = Theme.Background, Padding = new Padding(0, 8, 0, 0) };
+        staffPage.Controls.Add(staffGridCard);
+        staffPage.Controls.Add(staffFooter);
+        staffPage.Controls.Add(staffActionBar);
+
+        var tabs = new TabControl { Dock = DockStyle.Fill, Font = Theme.Bold };
+        tabs.TabPages.Add(playerPage);
+        tabs.TabPages.Add(staffPage);
+
+        Controls.Add(tabs);
         Controls.Add(titleRow);
     }
 
     private Member? Current() => _grid.CurrentRow?.Tag as Member;
+    private PendingStaff? CurrentStaff() => _staffGrid.CurrentRow?.Tag as PendingStaff;
 
     private static string FormatDate(string s) => DateTime.TryParse(s, out var d) ? d.ToString("dd.MM.yyyy HH:mm") : s;
 
@@ -121,6 +173,17 @@ public sealed class RegistrationsPanel : UserControl
         catch (Exception ex)
         {
             _footer.Text = "Fehler beim Laden.";
+            Theme.ShowError(FindForm() ?? (IWin32Window)this, ex);
+        }
+        try
+        {
+            _staffFooter.Text = "Lade neue Staff-Anmeldungen …";
+            _allStaff = await _api.ListPendingStaffAsync();
+            FillStaff();
+        }
+        catch (Exception ex)
+        {
+            _staffFooter.Text = "Fehler beim Laden.";
             Theme.ShowError(FindForm() ?? (IWin32Window)this, ex);
         }
     }
@@ -139,6 +202,22 @@ public sealed class RegistrationsPanel : UserControl
         }
         _grid.ResumeLayout();
         _footer.Text = _all.Count == 0 ? "Aktuell keine neuen Anmeldungen." : $"{_all.Count} Anmeldung(en) warten auf Prüfung · Doppelklick für Details";
+    }
+
+    private void FillStaff()
+    {
+        var selectedId = CurrentStaff()?.Id;
+        _staffGrid.SuspendLayout();
+        _staffGrid.Rows.Clear();
+        foreach (var s in _allStaff.OrderByDescending(s => s.CreatedAt))
+        {
+            var idx = _staffGrid.Rows.Add(s.DisplayName, s.Position, s.Email, s.Telefon, FormatDate(s.CreatedAt ?? ""));
+            var row = _staffGrid.Rows[idx];
+            row.Tag = s;
+            if (s.Id == selectedId) { row.Selected = true; _staffGrid.CurrentCell = row.Cells[0]; }
+        }
+        _staffGrid.ResumeLayout();
+        _staffFooter.Text = _allStaff.Count == 0 ? "Aktuell keine neuen Staff-Anmeldungen." : $"{_allStaff.Count} Staff-Anmeldung(en) warten auf Freigabe";
     }
 
     private async Task OpenDetailsAsync(Member member)
@@ -184,6 +263,38 @@ public sealed class RegistrationsPanel : UserControl
         try
         {
             await _api.RejectRegistrationAsync(member.Id);
+            await ReloadAsync();
+            Changed?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(FindForm() ?? (IWin32Window)this, ex);
+        }
+    }
+
+    private async Task ApproveStaffAsync()
+    {
+        if (CurrentStaff() is not { } person) return;
+        if (MessageBox.Show(FindForm(), $"„{person.DisplayName}“ wirklich als Staff übernehmen?", "Übernehmen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        try
+        {
+            await _api.ApproveStaffRegistrationAsync(person.Id);
+            await ReloadAsync();
+            Changed?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(FindForm() ?? (IWin32Window)this, ex);
+        }
+    }
+
+    private async Task RejectStaffAsync()
+    {
+        if (CurrentStaff() is not { } person) return;
+        if (MessageBox.Show(FindForm(), $"Staff-Anmeldung von „{person.DisplayName}“ wirklich ablehnen und löschen?", "Ablehnen", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        try
+        {
+            await _api.RejectStaffRegistrationAsync(person.Id);
             await ReloadAsync();
             Changed?.Invoke();
         }

@@ -53,8 +53,16 @@ public sealed record LinkInfo(string Name, string Email, string Link, string? Ve
 /// <summary>Ergebnis eines Massenmail-Versands je Person: status = sent, no_email oder error.</summary>
 public sealed record SendLinkResult(int Id, string Name, string Status, string Message);
 
-/// <summary>Registrierungslink für neue Mitglieder (Bereich „Neue Mitglieder“), siehe admin/registrations.php.</summary>
-public sealed record RegistrationLink(int Id, string Token, string Url, string? Label, bool Active, string? CreatedBy, string CreatedAt, string? ExpiresAt, int UseCount, string? LastUsedAt)
+/// <summary>Registrierungslink für neue Mitglieder oder Staff (Bereich „Neue Mitglieder“), siehe admin/registrations.php.
+/// LinkType: "player" (Spieler, Standard) oder "staff".</summary>
+public sealed record RegistrationLink(int Id, string Token, string Url, string? Label, string LinkType, bool Active, string? CreatedBy, string CreatedAt, string? ExpiresAt, int UseCount, string? LastUsedAt)
 {
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? "(ohne Bezeichnung)" : Label;
+    public bool IsStaff => LinkType == "staff";
+}
+
+/// <summary>Ausstehende Staff-Anmeldung über den Staff-Einladungslink (staff.status = "neu").</summary>
+public sealed record PendingStaff(int Id, string NameVorname, string? Position, string? Email, string? Telefon, string? CreatedAt)
+{
+    public string DisplayName => string.IsNullOrWhiteSpace(NameVorname) ? "(ohne Namen)" : NameVorname;
 }
