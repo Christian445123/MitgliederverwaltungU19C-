@@ -715,11 +715,13 @@ public sealed class ApiClient : IDisposable
     }
 
     /// <summary>Sendet Link und neuen Zugangscode per E-Mail (Massenmail; der Server erlaubt höchstens 10 pro Aufruf).</summary>
-    public async Task<List<SendLinkResult>> SendLinksAsync(string entity, IEnumerable<int> ids, CancellationToken ct = default)
+    public async Task<List<SendLinkResult>> SendLinksAsync(string entity, IEnumerable<int> ids, string? note = null, CancellationToken ct = default)
     {
         var arr = new JsonArray();
         foreach (var id in ids) arr.Add(id);
-        using var doc = await SendJsonAsync(HttpMethod.Post, $"{entity}/send-links", new JsonObject { ["ids"] = arr }, ct);
+        var body = new JsonObject { ["ids"] = arr };
+        if (!string.IsNullOrWhiteSpace(note)) body["note"] = note;
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"{entity}/send-links", body, ct);
         var list = new List<SendLinkResult>();
         if (doc.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
         {

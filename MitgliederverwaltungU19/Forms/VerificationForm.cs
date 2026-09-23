@@ -23,6 +23,8 @@ public sealed class VerificationForm : Form
     private readonly RadioButton _rAll = new() { AutoSize = true };
     private readonly CheckBox _doReset = new() { AutoSize = true, Checked = true, Text = "Bestätigung zurücksetzen (alle müssen ihre Daten erneut bestätigen)" };
     private readonly CheckBox _doMail = new() { AutoSize = true, Checked = true, Text = "Link und neuen Zugangscode per E-Mail senden (Massenmail)" };
+    private readonly Label _noteLabel = new() { AutoSize = true, Text = "Anmerkung (optional, wird zusätzlich in die E-Mail eingefügt):", Margin = new Padding(20, 6, 0, 2) };
+    private readonly TextBox _note = new() { Width = 500, Height = 50, Multiline = true, ScrollBars = ScrollBars.Vertical, Margin = new Padding(20, 0, 0, 0) };
     private readonly ProgressBar _progress = new() { Width = 540, Height = 14, Visible = false };
     private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(0, 8, 0, 0) };
     private readonly ListBox _problems = new() { Width = 540, Height = 110, Visible = false, IntegralHeight = false };
@@ -79,7 +81,9 @@ public sealed class VerificationForm : Form
         layout.Controls.Add(new Label { Text = "Für wen?", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 16, 0, 4) });
         layout.Controls.AddRange(new Control[] { _rSel, _rPending, _rAll });
         layout.Controls.Add(new Label { Text = "Aktion", AutoSize = true, Font = Theme.Bold, Margin = new Padding(0, 16, 0, 4) });
-        layout.Controls.AddRange(new Control[] { _doReset, _doMail });
+        layout.Controls.AddRange(new Control[] { _doReset, _doMail, _noteLabel, _note });
+        _doMail.CheckedChanged += (_, _) => { _noteLabel.Visible = _note.Visible = _doMail.Checked; };
+        _noteLabel.Visible = _note.Visible = _doMail.Checked;
         var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 16, 0, 0) };
         buttons.Controls.AddRange(new Control[] { _run, _close });
         layout.Controls.Add(buttons);
@@ -136,6 +140,7 @@ public sealed class VerificationForm : Form
 
             if (_doMail.Checked)
             {
+                var note = _note.Text.Trim();
                 var mailable = scope.Where(p => p.HasEmail).Select(p => p.Id).ToList();
                 var sent = 0;
                 var failed = 0;
@@ -146,7 +151,7 @@ public sealed class VerificationForm : Form
                 {
                     var batch = mailable.Skip(i).Take(MailBatch).ToList();
                     _status.Text = $"Sende E-Mails … {i} von {mailable.Count}";
-                    foreach (var r in await _api.SendLinksAsync(_entity, batch))
+                    foreach (var r in await _api.SendLinksAsync(_entity, batch, note))
                     {
                         if (r.Status == "sent") sent++;
                         else
