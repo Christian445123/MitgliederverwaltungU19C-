@@ -69,3 +69,7 @@ public sealed record PendingStaff(int Id, string NameVorname, string? Position, 
 
 /// <summary>API-Zugang für PC-Anwendungen (Excel, PowerShell, eigene Tools), siehe admin/api.php.</summary>
 public sealed record ApiTokenInfo(int Id, string Name, bool CanWrite, string CreatedAt, string? CreatedByName, string? LastUsedAt);
+
+/// <summary>Pflichtfelder-Einstellung bei der Selbstanmeldung (Spieler oder Staff), siehe admin/registration-fields.php.
+/// Registry = alle wählbaren Felder in Reihenfolge (Schlüssel + Beschriftung), Required = aktuell angehakte Schlüssel.</summary>
+public sealed record RegistrationFieldSet(List<(string Key, string Label)> Registry, HashSet<string> Required);

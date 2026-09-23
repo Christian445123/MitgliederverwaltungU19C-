@@ -697,6 +697,36 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"manage/api-tokens/{id}", null, ct);
     }
 
+    private static RegistrationFieldSet ParseRegistrationFieldSet(JsonElement e)
+    {
+        var registry = new List<(string, string)>();
+        if (e.TryGetProperty("registry", out var reg) && reg.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in reg.EnumerateObject()) registry.Add((p.Name, p.Value.GetString() ?? p.Name));
+        }
+        var required = new HashSet<string>();
+        if (e.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var r in req.EnumerateArray()) if (r.GetString() is { } s) required.Add(s);
+        }
+        return new RegistrationFieldSet(registry, required);
+    }
+
+    /// <summary>Pflichtfelder bei der Selbstanmeldung (Spieler und Staff) lesen.</summary>
+    public async Task<(RegistrationFieldSet Player, RegistrationFieldSet Staff)> GetRegistrationFieldsAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "manage/registration-fields", null, ct);
+        return (ParseRegistrationFieldSet(doc.RootElement.GetProperty("player")), ParseRegistrationFieldSet(doc.RootElement.GetProperty("staff")));
+    }
+
+    /// <summary>Speichert die Pflichtfelder für "player" oder "staff".</summary>
+    public async Task SaveRegistrationFieldsAsync(string type, IEnumerable<string> requiredKeys, CancellationToken ct = default)
+    {
+        var arr = new JsonArray();
+        foreach (var k in requiredKeys) arr.Add(k);
+        using var _ = await SendJsonAsync(HttpMethod.Put, "manage/registration-fields", new JsonObject { ["type"] = type, ["required"] = arr }, ct);
+    }
+
     private static string LogQuery(LogFilter f, int? page)
     {
         var parts = new List<string>();

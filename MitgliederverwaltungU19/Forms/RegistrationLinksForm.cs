@@ -57,8 +57,11 @@ public sealed class RegistrationLinksForm : Form
         create.Click += async (_, _) => await CreateAsync();
         var expiresLabel = new Label { Text = "gültig bis (optional):", AutoSize = true, Margin = new Padding(10, 8, 4, 0) };
         _label.Enabled = _expires.Enabled = _linkType.Enabled = _canWrite;
+        var fields = Theme.MakeButton("Pflichtfelder …");
+        fields.Margin = new Padding(16, 0, 0, 0);
+        fields.Click += (_, _) => { using var form = new RegistrationFieldsForm(_api); form.ShowDialog(this); };
         var createBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(16, 10, 16, 0) };
-        createBar.Controls.AddRange(new Control[] { _linkType, _label, expiresLabel, _expires, create });
+        createBar.Controls.AddRange(new Control[] { _linkType, _label, expiresLabel, _expires, create, fields });
 
         // Liste
         _grid.Dock = DockStyle.Fill;
