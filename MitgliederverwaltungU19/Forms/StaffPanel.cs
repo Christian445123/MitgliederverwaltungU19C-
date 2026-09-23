@@ -20,7 +20,6 @@ public sealed class StaffPanel : UserControl
         ("telefon", "Telefon", false, false, false),
         ("email", "Mail", false, false, false),
         ("telefon_angehoeriger", "Telefonnummer Angehörige", false, false, false),
-        ("sozialversicherungsnummer", "Sozial Ver. Nr.", false, false, false),
         ("reisepass_nr", "Reisepass Nr", false, false, false),
         ("reisepass_ausgestellt_am", "Reisepass ausgestellt am", true, false, false),
         ("reisepass_gueltig_bis", "Reisepass gültig bis", true, false, false),
@@ -29,9 +28,6 @@ public sealed class StaffPanel : UserControl
         ("plz", "PLZ", false, false, false),
         ("ort", "Ort", false, false, false),
         ("strasse", "Straße", false, false, false),
-        ("kontoinhaber", "Kontoinhaber", false, false, false),
-        ("iban", "IBAN", false, false, false),
-        ("bic", "BIC", false, false, false),
         ("essen", "Essen", false, true, false),
         ("tshirt_polo_groesse", "T-Shirt / Polo Größe", false, false, false),
         ("hoodie_groesse", "Hoodie Größe", false, false, false),
@@ -39,6 +35,10 @@ public sealed class StaffPanel : UserControl
         ("short_groesse", "Short Größe", false, false, false),
         ("shorts_anzahl", "Wie viele Shorts besitzt du?", false, false, false),
         ("coaching_hosen_lang_groesse", "Coaching Hosen (lang) Größe", false, false, false),
+        ("coaching_hosen_lang_anzahl", "Coaching Hosen (lang) besitzt du?", false, false, false),
+        ("geburtsort", "Geburtsort", false, false, false),
+        ("sozialversicherungsnummer", "SVNR", false, false, false),
+        ("iban", "Bankverbindung (IBAN)", false, false, false),
     };
 
     private readonly ApiClient _api;

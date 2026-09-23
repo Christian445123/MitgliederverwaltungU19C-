@@ -5,7 +5,7 @@ namespace MitgliederverwaltungU19.Forms;
 
 /// <summary>
 /// Formular zum Anlegen/Bearbeiten einer Person im Staff, wie bei den Spielern in Register unterteilt:
-/// Stammdaten, Kontakt &amp; Adresse, Sozialversicherung (mit E-Card), Reisepass (mit Foto), Dokumente, Ausrüstung &amp; Essen.
+/// Stammdaten, Kontakt &amp; Adresse, Reisepass (mit Foto), Dokumente (inkl. E-Card), Ausrüstung &amp; Essen, Sonstige Angaben.
 /// </summary>
 internal sealed class StaffEditDialog : Form
 {
@@ -21,11 +21,10 @@ internal sealed class StaffEditDialog : Form
     {
         ("Stammdaten", new[] { "nachname", "vorname", "position", "nada", "geburtsdatum" }, Array.Empty<(string, string)>()),
         ("Kontakt & Adresse", new[] { "telefon", "email", "telefon_angehoeriger", "plz", "ort", "strasse" }, Array.Empty<(string, string)>()),
-        ("Sozialversicherung", new[] { "sozialversicherungsnummer" }, new[] { ("ecard", "E-Card (freiwillig)") }),
         ("Reisepass", new[] { "reisepass_nr", "reisepass_ausgestellt_am", "reisepass_gueltig_bis", "geburtsland", "ausstellungsbehoerde" }, new[] { ("pass", "Reisepass (Foto, freiwillig)") }),
-        ("Dokumente", Array.Empty<string>(), new[] { ("rechte", "Rechte & Pflichten (unterschrieben, freiwillig)") }),
-        ("Kontodaten", new[] { "kontoinhaber", "iban", "bic" }, Array.Empty<(string, string)>()),
-        ("Ausrüstung & Essen", new[] { "essen", "tshirt_polo_groesse", "hoodie_groesse", "jacken_groesse", "short_groesse", "shorts_anzahl", "coaching_hosen_lang_groesse" }, Array.Empty<(string, string)>()),
+        ("Dokumente", Array.Empty<string>(), new[] { ("rechte", "Rechte & Pflichten (unterschrieben, freiwillig)"), ("ecard", "E-Card (freiwillig)") }),
+        ("Ausrüstung & Essen", new[] { "essen", "tshirt_polo_groesse", "hoodie_groesse", "jacken_groesse", "short_groesse", "shorts_anzahl", "coaching_hosen_lang_groesse", "coaching_hosen_lang_anzahl" }, Array.Empty<(string, string)>()),
+        ("Sonstige Angaben", new[] { "geburtsort", "sozialversicherungsnummer", "iban" }, Array.Empty<(string, string)>()),
     };
 
     /// <summary>Neu gewählte Dateien je Dokumenttyp (werden nach dem Speichern hochgeladen).</summary>
