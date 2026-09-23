@@ -283,7 +283,6 @@ public sealed class MainForm : Form
 
         // Tabelle in einer Karte mit feinem Rahmen
         _grid.Dock = DockStyle.Fill;
-        _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
         _grid.AllowUserToResizeRows = false;
@@ -485,6 +484,7 @@ public sealed class MainForm : Form
             SortMode = DataGridViewColumnSortMode.Automatic,
             ToolTipText = name == "nada" ? "NADA-Zertifikat gültig bis" : name == "pass" ? "Reisepass gültig bis" : "",
             MinimumWidth = Theme.Px(name is "nada" or "pass" ? 98 : name is "jersey" ? 48 : name is "bestaetigt" ? 96 : 70),
+            ReadOnly = true,
         });
     }
 

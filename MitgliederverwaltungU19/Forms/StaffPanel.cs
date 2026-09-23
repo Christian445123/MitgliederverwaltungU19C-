@@ -126,7 +126,6 @@ public sealed class StaffPanel : UserControl
 
         // Tabelle in einer Karte
         _grid.Dock = DockStyle.Fill;
-        _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
         _grid.AllowUserToResizeRows = false;
@@ -153,6 +152,7 @@ public sealed class StaffPanel : UserControl
                 SortMode = DataGridViewColumnSortMode.Automatic,
                 MinimumWidth = key == "reisepass_gueltig_bis" ? Theme.Px(98) : key == "bestaetigt" ? Theme.Px(96) : Theme.Px(70),
                 ToolTipText = key == "reisepass_gueltig_bis" ? "Reisepass gültig bis" : "",
+                ReadOnly = true,
             });
         }
         _grid.Columns.Add(Theme.LinkColumn());

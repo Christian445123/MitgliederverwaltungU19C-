@@ -350,6 +350,7 @@ public static class Theme
             MinimumWidth = Px(96),
             Resizable = DataGridViewTriState.False,
             SortMode = DataGridViewColumnSortMode.NotSortable,
+            ReadOnly = true,
         };
         col.DefaultCellStyle.BackColor = AccentSoft;
         col.DefaultCellStyle.ForeColor = AccentDark;
@@ -372,8 +373,6 @@ public static class Theme
             AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
             Resizable = DataGridViewTriState.False,
             SortMode = DataGridViewColumnSortMode.NotSortable,
-            // Bleibt anklickbar, auch wenn das Grid selbst ReadOnly ist (nur Anzeige der übrigen Spalten).
-            ReadOnly = false,
         };
     }
 
