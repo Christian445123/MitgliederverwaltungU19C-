@@ -625,6 +625,28 @@ public sealed class ApiClient : IDisposable
         return ParseCamps(doc.RootElement.GetProperty("camps"));
     }
 
+    /// <summary>Auswahlliste aller Camps (fest + weitere) für Filter/Massenzuweisung: Wert (z.B. "camp_1"/"c12") + Beschriftung.</summary>
+    public async Task<List<(string Value, string Label)>> GetCampOptionsAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "camps", null, ct);
+        var list = new List<(string, string)>();
+        if (doc.RootElement.TryGetProperty("options", out var options) && options.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in options.EnumerateObject()) list.Add((p.Name, p.Value.GetString() ?? p.Name));
+        }
+        return list;
+    }
+
+    /// <summary>Weist ein Camp mehreren Mitgliedern oder Staff-Personen auf einmal zu bzw. entfernt es wieder.</summary>
+    public async Task<int> AssignCampAsync(string entity, IEnumerable<int> ids, string camp, bool add, CancellationToken ct = default)
+    {
+        var arr = new JsonArray();
+        foreach (var id in ids) arr.Add(id);
+        var body = new JsonObject { ["ids"] = arr, ["camp"] = camp, ["action"] = add ? "add" : "remove" };
+        using var doc = await SendJsonAsync(HttpMethod.Post, $"{entity}/camp-assign", body, ct);
+        return doc.RootElement.TryGetProperty("changed", out var n) && n.TryGetInt32(out var count) ? count : 0;
+    }
+
     public async Task<(List<string> Fixed, List<CampInfo> Camps)> GetCampsAdminAsync(CancellationToken ct = default)
     {
         using var doc = await SendJsonAsync(HttpMethod.Get, "manage/camps", null, ct);

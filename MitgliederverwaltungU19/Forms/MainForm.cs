@@ -20,6 +20,9 @@ public sealed class MainForm : Form
     private List<Member> _all = new();
     private readonly HashSet<int> _checkedIds = new();
     private Action? _updateBulkButtons;
+    private readonly ComboBox _campAssign = new() { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _campAction = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
+    private List<(string Value, string Label)> _campOptions = new();
     private readonly Panel _banner = new() { Dock = DockStyle.Top, Height = 40, BackColor = Color.FromArgb(0xFF, 0xF2, 0xE6), Visible = false };
     private readonly Label _bannerText = new() { AutoSize = true, Location = new Point(16, 11), Font = Theme.Bold };
     private readonly Button _showExpiry = Theme.MakeButton("Ablauf anzeigen");
@@ -70,6 +73,7 @@ public sealed class MainForm : Form
             _licenseTimer.Start();
             await CheckLicenseAsync();
             await ReloadAsync();
+            if (_ping.CanWrite && _ping.Can("members.edit")) await LoadCampOptionsAsync();
             await CheckForUpdateAsync();
             _updateTimer.Tick += async (_, _) => await CheckForUpdateAsync();
             _updateTimer.Start();
@@ -281,6 +285,16 @@ public sealed class MainForm : Form
         deleteAll.Margin = new Padding(0, 0, 0, 0);
         filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, _kaderFilter, edit, link, verify, selectAll, selectNone, delete, deleteAll });
 
+        // Camp-Massenzuweisung (wie im Webpanel): Camp + zuweisen/entfernen auf die ausgewählten Mitglieder anwenden
+        var campBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Padding = new Padding(0, 0, 0, 6), Visible = _ping.CanWrite && _ping.Can("members.edit") };
+        _campAction.Items.AddRange(new object[] { "zuweisen", "entfernen" });
+        _campAction.SelectedIndex = 0;
+        _campAssign.Margin = new Padding(0, 0, 8, 0);
+        _campAction.Margin = new Padding(0, 0, 8, 0);
+        var campApply = Theme.MakeButton("Bei Ausgewählten anwenden");
+        campApply.Click += async (_, _) => await ApplyCampAssignAsync();
+        campBar.Controls.AddRange(new Control[] { _campAssign, _campAction, campApply });
+
         // Tabelle in einer Karte mit feinem Rahmen
         _grid.Dock = DockStyle.Fill;
         _grid.AllowUserToAddRows = false;
@@ -372,6 +386,7 @@ public sealed class MainForm : Form
         // Reihenfolge: Fill zuerst, dann Bottom, dann Top (zuletzt hinzugefügt = ganz oben)
         content.Controls.Add(gridCard);
         content.Controls.Add(footer);
+        content.Controls.Add(campBar);
         content.Controls.Add(filterRow);
         content.Controls.Add(cards);
         content.Controls.Add(titleRow);
@@ -700,6 +715,55 @@ public sealed class MainForm : Form
     /// <summary>Über die Kästchen ausgewählte Mitglieder (wie im Webpanel), nicht die reine Zeilenmarkierung.</summary>
     private List<Member> SelectedMembers() =>
         _all.Where(m => _checkedIds.Contains(m.Id)).ToList();
+
+    /// <summary>Lädt die Camp-Auswahlliste (fest + weitere) für die Massenzuweisung.</summary>
+    private async Task LoadCampOptionsAsync()
+    {
+        try
+        {
+            _campOptions = await _api.GetCampOptionsAsync();
+            _campAssign.Items.Clear();
+            _campAssign.Items.AddRange(_campOptions.Select(o => (object) o.Label).ToArray());
+            if (_campOptions.Count > 0) _campAssign.SelectedIndex = 0;
+        }
+        catch (Exception)
+        {
+            // Massenzuweisung ist nur ein Zusatz - bei Fehlern bleibt die Liste leer, der Rest funktioniert normal
+        }
+    }
+
+    /// <summary>Weist das gewählte Camp allen über die Kästchen ausgewählten Mitgliedern zu bzw. entfernt es.</summary>
+    private async Task ApplyCampAssignAsync()
+    {
+        var selected = SelectedMembers();
+        if (selected.Count == 0)
+        {
+            MessageBox.Show(this, "Bitte zuerst über die Kästchen Mitglieder auswählen.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (_campAssign.SelectedIndex < 0 || _campAssign.SelectedIndex >= _campOptions.Count)
+        {
+            MessageBox.Show(this, "Bitte ein Camp auswählen.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var (value, label) = _campOptions[_campAssign.SelectedIndex];
+        var add = _campAction.SelectedIndex != 1;
+        try
+        {
+            UseWaitCursor = true;
+            var changed = await _api.AssignCampAsync("members", selected.Select(m => m.Id), value, add);
+            _footer.Text = $"„{label}“ bei {changed} Mitglied(ern) {(add ? "zugewiesen" : "entfernt")}.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Theme.ShowError(this, ex);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
 
     private async Task DeleteSelectedAsync()
     {

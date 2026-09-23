@@ -55,6 +55,10 @@ public sealed class StaffPanel : UserControl
     private List<Dictionary<string, string?>> _all = new();
     private readonly HashSet<int> _checkedIds = new();
     private Action? _updateBulkButtons;
+    private readonly ComboBox _campAssign = new() { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _campAction = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
+    private List<(string Value, string Label)> _campOptions = new();
+    private bool _campOptionsLoaded;
 
     public StaffPanel(ApiClient api, PingResult ping)
     {
@@ -124,6 +128,16 @@ public sealed class StaffPanel : UserControl
         var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.Px(52)), WrapContents = true, Padding = new Padding(0, 6, 0, 0) };
         filterRow.Controls.AddRange(new Control[] { _search, _statusFilter, edit, link, verify, selectAll, selectNone, delete });
 
+        // Camp-Massenzuweisung (wie im Webpanel): Camp + zuweisen/entfernen auf die ausgewählten Personen anwenden
+        var campBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Padding = new Padding(0, 0, 0, 6), Visible = _canWrite };
+        _campAction.Items.AddRange(new object[] { "zuweisen", "entfernen" });
+        _campAction.SelectedIndex = 0;
+        _campAssign.Margin = new Padding(0, 0, 8, 0);
+        _campAction.Margin = new Padding(0, 0, 8, 0);
+        var campApply = Theme.MakeButton("Bei Ausgewählten anwenden");
+        campApply.Click += async (_, _) => await ApplyCampAssignAsync();
+        campBar.Controls.AddRange(new Control[] { _campAssign, _campAction, campApply });
+
         // Tabelle in einer Karte
         _grid.Dock = DockStyle.Fill;
         _grid.AllowUserToAddRows = false;
@@ -176,6 +190,7 @@ public sealed class StaffPanel : UserControl
 
         Controls.Add(gridCard);
         Controls.Add(footer);
+        Controls.Add(campBar);
         Controls.Add(filterRow);
         Controls.Add(cards);
         Controls.Add(titleRow);
@@ -233,10 +248,56 @@ public sealed class StaffPanel : UserControl
             _all = await _api.ListStaffAsync();
             _checkedIds.IntersectWith(_all.Select(IdOf)); // gelöschte/nicht mehr vorhandene Personen aus der Auswahl entfernen
             ApplyFilter();
+            if (_canWrite && !_campOptionsLoaded) await LoadCampOptionsAsync();
         }
         catch (Exception ex)
         {
             _footer.Text = "Fehler beim Laden.";
+            Theme.ShowError(FindForm() ?? (IWin32Window)this, ex);
+        }
+    }
+
+    /// <summary>Lädt die Camp-Auswahlliste (fest + weitere) für die Massenzuweisung.</summary>
+    private async Task LoadCampOptionsAsync()
+    {
+        try
+        {
+            _campOptions = await _api.GetCampOptionsAsync();
+            _campAssign.Items.Clear();
+            _campAssign.Items.AddRange(_campOptions.Select(o => (object) o.Label).ToArray());
+            if (_campOptions.Count > 0) _campAssign.SelectedIndex = 0;
+            _campOptionsLoaded = true;
+        }
+        catch (Exception)
+        {
+            // Massenzuweisung ist nur ein Zusatz - bei Fehlern bleibt die Liste leer, der Rest funktioniert normal
+        }
+    }
+
+    /// <summary>Weist das gewählte Camp allen über die Kästchen ausgewählten Personen zu bzw. entfernt es.</summary>
+    private async Task ApplyCampAssignAsync()
+    {
+        var selected = Selected().ToList();
+        if (selected.Count == 0)
+        {
+            MessageBox.Show(FindForm(), "Bitte zuerst über die Kästchen Personen auswählen.", "Camp-Zuweisung", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (_campAssign.SelectedIndex < 0 || _campAssign.SelectedIndex >= _campOptions.Count)
+        {
+            MessageBox.Show(FindForm(), "Bitte ein Camp auswählen.", "Camp-Zuweisung", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var (value, label) = _campOptions[_campAssign.SelectedIndex];
+        var add = _campAction.SelectedIndex != 1;
+        try
+        {
+            var changed = await _api.AssignCampAsync("staff", selected.Select(IdOf), value, add);
+            _footer.Text = $"„{label}“ bei {changed} Person(en) {(add ? "zugewiesen" : "entfernt")}.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
             Theme.ShowError(FindForm() ?? (IWin32Window)this, ex);
         }
     }
