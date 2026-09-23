@@ -66,3 +66,6 @@ public sealed record PendingStaff(int Id, string NameVorname, string? Position, 
 {
     public string DisplayName => string.IsNullOrWhiteSpace(NameVorname) ? "(ohne Namen)" : NameVorname;
 }
+
+/// <summary>API-Zugang für PC-Anwendungen (Excel, PowerShell, eigene Tools), siehe admin/api.php.</summary>
+public sealed record ApiTokenInfo(int Id, string Name, bool CanWrite, string CreatedAt, string? CreatedByName, string? LastUsedAt);

@@ -669,6 +669,34 @@ public sealed class ApiClient : IDisposable
         using var _ = await SendJsonAsync(HttpMethod.Delete, $"manage/camps/{id}", null, ct);
     }
 
+    private static string? StrOrNull(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static List<ApiTokenInfo> ParseApiTokens(JsonElement tokens) => tokens.EnumerateArray()
+        .Select(t => new ApiTokenInfo(
+            t.GetProperty("id").GetInt32(), Str(t, "name"),
+            t.TryGetProperty("can_write", out var w) && (w.ValueKind == JsonValueKind.True || (w.ValueKind == JsonValueKind.Number && w.GetInt32() == 1)),
+            Str(t, "created_at"), StrOrNull(t, "created_by_name"), StrOrNull(t, "last_used_at"))).ToList();
+
+    /// <summary>API-Zugänge für PC-Anwendungen (Excel, PowerShell, eigene Tools) auflisten.</summary>
+    public async Task<List<ApiTokenInfo>> GetApiTokensAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Get, "manage/api-tokens", null, ct);
+        return ParseApiTokens(doc.RootElement.GetProperty("tokens"));
+    }
+
+    /// <summary>Legt einen neuen API-Zugang an. Liefert den Klartext-Schlüssel (nur jetzt verfügbar, wird nicht gespeichert).</summary>
+    public async Task<string> CreateApiTokenAsync(string name, bool canWrite, CancellationToken ct = default)
+    {
+        using var doc = await SendJsonAsync(HttpMethod.Post, "manage/api-tokens", new JsonObject { ["name"] = name, ["can_write"] = canWrite }, ct);
+        return Str(doc.RootElement, "token");
+    }
+
+    public async Task DeleteApiTokenAsync(int id, CancellationToken ct = default)
+    {
+        using var _ = await SendJsonAsync(HttpMethod.Delete, $"manage/api-tokens/{id}", null, ct);
+    }
+
     private static string LogQuery(LogFilter f, int? page)
     {
         var parts = new List<string>();

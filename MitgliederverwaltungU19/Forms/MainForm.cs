@@ -167,6 +167,7 @@ public sealed class MainForm : Form
         Nav("Camps", "", () => { using var form = new CampsForm(_api, _ping.Can("camps.delete")); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("camps.manage");
         Nav("Feld-Rechte", "", () => { using var form = new FieldPermissionsForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("fields.manage");
         Nav("Benutzer & Rechte", "", () => { using var form = new UserAdminForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("users.manage");
+        Nav("API-Zugänge", "", () => { using var form = new ApiTokensForm(_api); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("api.manage");
         Nav("Protokoll", "", () => { using var form = new LogForm(_api, _ping.Can("logs.purge")); form.ShowDialog(this); }).Visible = signedIn && _ping.Can("logs.view");
 
         // Unterer Bereich der Seitenleiste
